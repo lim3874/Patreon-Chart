@@ -176,12 +176,68 @@ class PatreonMemberApp(tk.Tk):
         style.configure("Title.TLabel", background=p["bg"], foreground=p["ink"], font=("Segoe UI", 18, "bold"))
         style.configure("MetricTitle.TLabel", background=p["panel"], foreground=p["muted"], font=("Segoe UI", 10))
         style.configure("MetricValue.TLabel", background=p["panel"], foreground=p["ink"], font=("Segoe UI", 22, "bold"))
-        style.configure("TButton", padding=(12, 7), font=("Segoe UI", 10))
-        style.configure("Accent.TButton", padding=(14, 8), font=("Segoe UI", 10, "bold"))
+        style.configure(
+            "TButton",
+            padding=(12, 7),
+            font=("Segoe UI", 10),
+            background=p["panel_alt"],
+            foreground=p["ink"],
+            bordercolor=p["line"],
+            lightcolor=p["panel_alt"],
+            darkcolor=p["line"],
+        )
+        style.map(
+            "TButton",
+            background=[("active", p["track"]), ("disabled", p["panel_alt"])],
+            foreground=[("active", p["ink"]), ("disabled", p["muted"])],
+        )
+        style.configure(
+            "Accent.TButton",
+            padding=(14, 8),
+            font=("Segoe UI", 10, "bold"),
+            background=p["panel_alt"],
+            foreground=p["ink"],
+            bordercolor=p["line"],
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", p["track"]), ("disabled", p["panel_alt"])],
+            foreground=[("active", p["ink"]), ("disabled", p["muted"])],
+        )
         style.configure("TCheckbutton", background=p["bg"], foreground=p["ink"])
         style.map("TCheckbutton", background=[("active", p["bg"])], foreground=[("active", p["ink"])])
-        style.configure("TEntry", fieldbackground=p["panel"], foreground=p["ink"], insertcolor=p["ink"])
-        style.configure("TCombobox", fieldbackground=p["panel"], background=p["panel"], foreground=p["ink"])
+        style.configure(
+            "TEntry",
+            fieldbackground=p["panel"],
+            foreground=p["ink"],
+            insertcolor=p["ink"],
+            bordercolor=p["line"],
+            lightcolor=p["panel"],
+            darkcolor=p["line"],
+        )
+        style.map(
+            "TEntry",
+            fieldbackground=[("disabled", p["panel_alt"]), ("readonly", p["panel_alt"])],
+            foreground=[("disabled", p["ink"]), ("readonly", p["ink"])],
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground=p["panel"],
+            background=p["panel_alt"],
+            foreground=p["ink"],
+            arrowcolor=p["ink"],
+            selectbackground=p["panel_alt"],
+            selectforeground=p["ink"],
+            bordercolor=p["line"],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", p["panel"]), ("disabled", p["panel_alt"])],
+            foreground=[("readonly", p["ink"]), ("disabled", p["ink"])],
+            selectbackground=[("readonly", p["panel"])],
+            selectforeground=[("readonly", p["ink"])],
+            arrowcolor=[("readonly", p["ink"]), ("disabled", p["muted"])],
+        )
         style.configure("TNotebook", background=p["bg"], borderwidth=0)
         style.configure("TNotebook.Tab", background=p["panel_alt"], foreground=p["ink"], padding=(16, 8))
         style.map("TNotebook.Tab", background=[("selected", p["panel"])], foreground=[("selected", p["ink"])])
@@ -1099,7 +1155,7 @@ class PatreonMemberApp(tk.Tk):
         if preset != "사용자 지정":
             self.after_var.set("" if start is None else start.strftime("%Y/%m/%d"))
             self.before_var.set("" if end is None else end.strftime("%Y/%m/%d"))
-        state = tk.NORMAL if preset == "사용자 지정" else tk.DISABLED
+        state = tk.NORMAL if preset == "사용자 지정" else "readonly"
         if hasattr(self, "after_entry"):
             self.after_entry.configure(state=state)
         if hasattr(self, "before_entry"):

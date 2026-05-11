@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 - 2026-05-12
+
+### Fixed
+
+- Improve dark-mode contrast for buttons, comboboxes, and readonly date fields.
+- Keep preset date fields readable in dark mode by using readonly state instead of disabled state.
+
 ## 1.1.0 - 2026-05-12
 
 ### Added
