@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 - 2026-05-12
+
+### Fixed
+
+- Persist the dark mode toggle in `app_settings.json` so the GUI keeps the selected theme after restart.
+
 ## 1.0.0 - 2026-05-11
 
 Initial release.

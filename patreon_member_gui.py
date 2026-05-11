@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+import json
 import queue
 import subprocess
 import threading
@@ -42,6 +43,7 @@ TOKEN_PATH = APP_DIR / "token.json"
 CACHE_PATH = APP_DIR / ".cache" / "rates.json"
 PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
+APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 
 TABLE_COLUMNS = [
     ("received_at", "수신일", 170),
@@ -122,7 +124,8 @@ class PatreonMemberApp(tk.Tk):
         self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.is_running = False
 
-        self.dark_mode_var = tk.BooleanVar(value=False)
+        self.app_settings = load_app_settings(APP_SETTINGS_PATH)
+        self.dark_mode_var = tk.BooleanVar(value=bool(self.app_settings.get("dark_mode", False)))
         self.group_var = tk.StringVar(value="월별")
         self.tier_filter_var = tk.StringVar(value="전체")
         self.after_var = tk.StringVar(value=f"{dt.date.today().year}/01/01")
@@ -380,6 +383,8 @@ class PatreonMemberApp(tk.Tk):
         return frame
 
     def toggle_theme(self) -> None:
+        self.app_settings["dark_mode"] = bool(self.dark_mode_var.get())
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
         self._configure_style()
         self._configure_tree_tags()
         self._draw_tier_chart(self.visible_rows)
@@ -860,6 +865,23 @@ def main() -> int:
     app = PatreonMemberApp()
     app.mainloop()
     return 0
+
+
+def load_app_settings(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_app_settings(path: Path, settings: dict[str, object]) -> None:
+    path.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
