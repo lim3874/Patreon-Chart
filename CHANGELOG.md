@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0 - 2026-05-12
+
+### Added
+
+- Add Patreon-style date range preset dropdown:
+  - last 24 hours
+  - last 30 days
+  - last 6 months
+  - last 12 months
+  - all time
+  - custom
+- Add Patreon-style insight controls for the period chart:
+  - all
+  - membership tier
+  - billing cycle
+  - payment status
+  - paid conversion path
+- Add daily/weekly/monthly chart granularity controls with persistent settings.
+- Add card-style chart summaries for each selected insight category.
+- Add member table columns for event type, membership tier, billing cycle, payment status, and paid conversion path.
+
 ## 1.0.1 - 2026-05-12
 
 ### Fixed

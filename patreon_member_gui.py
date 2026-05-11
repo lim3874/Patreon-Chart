@@ -46,10 +46,14 @@ PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 
 TABLE_COLUMNS = [
+    ("event_type", "항목", 110),
     ("received_at", "수신일", 170),
     ("member_name", "이름", 170),
     ("member_email", "이메일", 240),
-    ("tier", "티어", 70),
+    ("membership_tier", "멤버십 등급", 120),
+    ("billing_cycle", "청구 주기", 100),
+    ("payment_status", "결제 상태", 150),
+    ("conversion_path", "유료 전환 경로", 140),
     ("original_amount", "원문 금액", 110),
     ("usd_estimate", "USD 추정", 100),
     ("confidence", "판정", 100),
@@ -110,6 +114,11 @@ TIER_COLORS = {
     "needs_review": "review",
 }
 
+RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12개월", "전체", "사용자 지정"]
+GROUP_OPTIONS = ["매일", "매주", "매월"]
+INSIGHT_DIMENSIONS = ["전체", "멤버십 등급", "청구 주기", "결제 상태", "유료로 전환하는 경로"]
+SERIES_COLORS = ["#338ccf", "#ffb77c", "#88df3f", "#ffe047", "#a78bfa", "#2dd4bf"]
+
 
 class PatreonMemberApp(tk.Tk):
     def __init__(self) -> None:
@@ -126,14 +135,25 @@ class PatreonMemberApp(tk.Tk):
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.dark_mode_var = tk.BooleanVar(value=bool(self.app_settings.get("dark_mode", False)))
-        self.group_var = tk.StringVar(value="월별")
+        self.range_var = tk.StringVar(value=str(self.app_settings.get("range_preset", "지난 30일")))
+        if self.range_var.get() not in RANGE_PRESETS:
+            self.range_var.set("지난 30일")
+        self.group_var = tk.StringVar(value=str(self.app_settings.get("group_unit", "매일")))
+        if self.group_var.get() not in GROUP_OPTIONS:
+            self.group_var.set("매일")
+        self.insight_dimension_var = tk.StringVar(value=str(self.app_settings.get("insight_dimension", "결제 상태")))
+        if self.insight_dimension_var.get() not in INSIGHT_DIMENSIONS:
+            self.insight_dimension_var.set("결제 상태")
         self.tier_filter_var = tk.StringVar(value="전체")
-        self.after_var = tk.StringVar(value=f"{dt.date.today().year}/01/01")
+        self.after_var = tk.StringVar(value="")
         self.before_var = tk.StringVar(value="")
+        self.current_start_date: dt.date | None = None
+        self.current_end_date: dt.date | None = None
         self.palette = LIGHT_THEME
 
         self._configure_style()
         self._build_ui()
+        self._apply_range_preset_to_entries()
         self._load_existing_csv()
         self._poll_worker_queue()
 
@@ -198,10 +218,22 @@ class PatreonMemberApp(tk.Tk):
 
         controls = ttk.Frame(root, padding=(0, 14, 0, 10))
         controls.pack(fill=tk.X)
+        ttk.Label(controls, text="기간").pack(side=tk.LEFT)
+        self.range_box = ttk.Combobox(
+            controls,
+            textvariable=self.range_var,
+            values=RANGE_PRESETS,
+            width=13,
+            state="readonly",
+        )
+        self.range_box.pack(side=tk.LEFT, padx=(6, 14))
+        self.range_box.bind("<<ComboboxSelected>>", lambda _event: self.on_range_changed())
         ttk.Label(controls, text="시작일").pack(side=tk.LEFT)
-        ttk.Entry(controls, textvariable=self.after_var, width=13).pack(side=tk.LEFT, padx=(6, 14))
+        self.after_entry = ttk.Entry(controls, textvariable=self.after_var, width=13)
+        self.after_entry.pack(side=tk.LEFT, padx=(6, 14))
         ttk.Label(controls, text="종료일").pack(side=tk.LEFT)
-        ttk.Entry(controls, textvariable=self.before_var, width=13).pack(side=tk.LEFT, padx=(6, 14))
+        self.before_entry = ttk.Entry(controls, textvariable=self.before_var, width=13)
+        self.before_entry.pack(side=tk.LEFT, padx=(6, 14))
         ttk.Button(controls, text="기간 적용", command=self.apply_filters).pack(side=tk.LEFT, padx=(0, 8))
         self.refresh_button = ttk.Button(
             controls,
@@ -262,22 +294,38 @@ class PatreonMemberApp(tk.Tk):
     def _build_period_tab(self) -> None:
         top = ttk.Frame(self.period_tab)
         top.pack(fill=tk.X, pady=(0, 12))
-        ttk.Label(top, text="집계 단위").pack(side=tk.LEFT)
+        ttk.Label(top, text="신규 회원", style="Title.TLabel").pack(side=tk.LEFT)
+        ttk.Label(top, text="집계 단위").pack(side=tk.RIGHT, padx=(12, 0))
         unit_box = ttk.Combobox(
             top,
             textvariable=self.group_var,
-            values=["일별", "주별", "월별"],
+            values=GROUP_OPTIONS,
             width=8,
             state="readonly",
         )
-        unit_box.pack(side=tk.LEFT, padx=(6, 10))
-        unit_box.bind("<<ComboboxSelected>>", lambda _event: self._draw_period_chart(self.visible_rows))
-        ttk.Label(top, text="상단 시작일/종료일을 바꾸고 기간 적용을 누르면 이 차트도 바뀝니다.", style="Muted.TLabel").pack(side=tk.LEFT)
+        unit_box.pack(side=tk.RIGHT)
+        unit_box.bind("<<ComboboxSelected>>", lambda _event: self.on_group_changed())
 
         panel = ttk.Frame(self.period_tab, style="Panel.TFrame", padding=16)
         panel.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(panel, text="기간별 가입 추이", style="Panel.TLabel", font=("Segoe UI", 13, "bold")).pack(anchor=tk.W)
-        self.period_chart = tk.Canvas(panel, height=440, bg=self.palette["panel"], highlightthickness=0)
+        self.dimension_frame = ttk.Frame(panel, style="Panel.TFrame")
+        self.dimension_frame.pack(fill=tk.X, pady=(0, 12))
+        self.dimension_buttons: dict[str, tk.Button] = {}
+        for dimension in INSIGHT_DIMENSIONS:
+            button = tk.Button(
+                self.dimension_frame,
+                text=dimension,
+                command=lambda value=dimension: self.select_insight_dimension(value),
+                bd=0,
+                padx=18,
+                pady=10,
+                font=("Segoe UI", 11, "bold"),
+                cursor="hand2",
+            )
+            button.pack(side=tk.LEFT, padx=(0, 8))
+            self.dimension_buttons[dimension] = button
+        self._refresh_dimension_buttons()
+        self.period_chart = tk.Canvas(panel, height=520, bg=self.palette["panel"], highlightthickness=0)
         self.period_chart.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
         self.period_chart.bind("<Configure>", lambda _event: self._draw_period_chart(self.visible_rows))
 
@@ -387,8 +435,42 @@ class PatreonMemberApp(tk.Tk):
         save_app_settings(APP_SETTINGS_PATH, self.app_settings)
         self._configure_style()
         self._configure_tree_tags()
+        self._refresh_dimension_buttons()
         self._draw_tier_chart(self.visible_rows)
         self._draw_period_chart(self.visible_rows)
+
+    def on_range_changed(self) -> None:
+        self.app_settings["range_preset"] = self.range_var.get()
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._apply_range_preset_to_entries()
+        self.apply_filters()
+
+    def on_group_changed(self) -> None:
+        self.app_settings["group_unit"] = self.group_var.get()
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._draw_period_chart(self.visible_rows)
+
+    def select_insight_dimension(self, dimension: str) -> None:
+        self.insight_dimension_var.set(dimension)
+        self.app_settings["insight_dimension"] = dimension
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._refresh_dimension_buttons()
+        self._draw_period_chart(self.visible_rows)
+
+    def _refresh_dimension_buttons(self) -> None:
+        if not hasattr(self, "dimension_buttons"):
+            return
+        p = self.palette
+        for dimension, button in self.dimension_buttons.items():
+            selected = dimension == self.insight_dimension_var.get()
+            button.configure(
+                bg="#3b3b3d" if selected and self.dark_mode_var.get() else (p["panel_alt"] if selected else p["panel"]),
+                fg=p["ink"],
+                activebackground=p["panel_alt"],
+                activeforeground=p["ink"],
+                relief=tk.FLAT,
+                highlightthickness=0,
+            )
 
     def _configure_tree_tags(self) -> None:
         if hasattr(self, "tree"):
@@ -425,11 +507,15 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_status_var.set(f"기존 Patreon API 결과를 불러왔습니다: {len(self.patreon_rows)}명")
 
     def apply_filters(self) -> None:
+        if self.range_var.get() != "사용자 지정":
+            self._apply_range_preset_to_entries()
         start = self._parse_date_text(self.after_var.get().strip())
         end = self._parse_date_text(self.before_var.get().strip())
         if start == "invalid" or end == "invalid":
             messagebox.showwarning("날짜 형식", "날짜는 YYYY/MM/DD 또는 YYYY-MM-DD 형식으로 입력하세요.")
             return
+        self.current_start_date = start if isinstance(start, dt.date) else None
+        self.current_end_date = end if isinstance(end, dt.date) else None
         self.visible_rows = [row for row in self.rows if self._row_in_period(row, start, end)]
         self._update_metrics(self.visible_rows)
         self._draw_tier_chart(self.visible_rows)
@@ -446,8 +532,10 @@ class PatreonMemberApp(tk.Tk):
                 f"Gmail API JSON 파일을 여기에 넣어야 합니다.\n\n{CREDENTIALS_PATH}",
             )
             return
-        start_text = self.after_var.get().strip()
-        end_text = self.before_var.get().strip()
+        start_text, end_text = self._gmail_query_date_texts()
+        if start_text == "invalid" or end_text == "invalid":
+            messagebox.showwarning("날짜 형식", "날짜는 YYYY/MM/DD 또는 YYYY-MM-DD 형식으로 입력하세요.")
+            return
         self.is_running = True
         self.refresh_button.configure(state=tk.DISABLED)
         self.status_var.set("Gmail에서 Patreon 가입 메일을 읽는 중입니다.")
@@ -580,7 +668,7 @@ class PatreonMemberApp(tk.Tk):
             self.tree.insert(
                 "",
                 tk.END,
-                values=[row.get(column, "") for column, _, _ in TABLE_COLUMNS],
+                values=[self._table_value(row, column) for column, _, _ in TABLE_COLUMNS],
                 tags=tags,
             )
         self.count_var.set(f"{len(rows)} rows")
@@ -670,6 +758,47 @@ class PatreonMemberApp(tk.Tk):
         tier = selected.replace("티어 ", "")
         return [row for row in self.visible_rows if row.get("tier") == tier]
 
+    def _table_value(self, row: dict[str, str], column: str) -> str:
+        if column == "event_type":
+            return "신규 회원"
+        if column == "membership_tier":
+            return self._membership_tier_label(row)
+        if column == "billing_cycle":
+            return self._billing_cycle_label(row)
+        if column == "payment_status":
+            return self._payment_status_label(row)
+        if column == "conversion_path":
+            return self._conversion_path_label(row)
+        return row.get(column, "")
+
+    def _membership_tier_label(self, row: dict[str, str]) -> str:
+        tier = row.get("tier", "")
+        if tier in {"1", "2", "3", "4"}:
+            return f"티어 {tier}"
+        return "확인필요"
+
+    def _billing_cycle_label(self, row: dict[str, str]) -> str:
+        subject = row.get("subject", "").lower()
+        if "annual" in subject or "yearly" in subject or "연간" in subject:
+            return "연간"
+        return "월간"
+
+    def _payment_status_label(self, row: dict[str, str]) -> str:
+        text = f"{row.get('subject', '')} {row.get('match_method', '')} {row.get('confidence', '')}".lower()
+        if "gift" in text or "선물" in text:
+            if "self" in text or "본인" in text:
+                return "선물 (본인)"
+            return "선물 (타인)"
+        if row.get("confidence") == "needs_review":
+            return "결제 완료 (재시도)"
+        return "유료 (활성 상태)"
+
+    def _conversion_path_label(self, row: dict[str, str]) -> str:
+        sender = row.get("from", "").lower()
+        if "patreon" in sender:
+            return "메일"
+        return "기타"
+
     def _draw_tier_chart(self, rows: list[dict[str, str]]) -> None:
         chart = self.tier_chart
         p = self.palette
@@ -713,99 +842,218 @@ class PatreonMemberApp(tk.Tk):
         p = self.palette
         chart.configure(bg=p["panel"])
         chart.delete("all")
-        buckets = self._period_buckets(rows, self.group_var.get())
-        width = max(chart.winfo_width(), 720)
-        height = max(chart.winfo_height(), 420)
+        series = self._insight_series()
+        buckets = self._period_buckets(rows, self.group_var.get(), series)
+        width = max(chart.winfo_width(), 840)
+        height = max(chart.winfo_height(), 500)
         left = 58
-        right = 24
-        top = 42
-        bottom = 92
+        right = 50
+        top = 34
+        card_h = 98
+        bottom = 126 + card_h
         plot_w = width - left - right
         plot_h = height - top - bottom
-        chart.create_line(left, top + plot_h, left + plot_w, top + plot_h, fill=p["line"])
-        chart.create_line(left, top, left, top + plot_h, fill=p["line"])
-        legend_x = left
-        for tier, label in [("1", "T1"), ("2", "T2"), ("3", "T3"), ("4", "T4"), ("needs_review", "확인")]:
-            color = p[TIER_COLORS[tier]]
-            chart.create_rectangle(legend_x, 14, legend_x + 12, 26, fill=color, outline="")
-            chart.create_text(legend_x + 18, 20, text=label, anchor=tk.W, fill=p["muted"], font=("Segoe UI", 9))
-            legend_x += 58
+        if plot_h < 160:
+            plot_h = 160
+        y_bottom = top + plot_h
+        chart.create_line(left, y_bottom, left + plot_w, y_bottom, fill=p["line"])
+        chart.create_line(left, top, left, y_bottom, fill=p["line"])
 
         if not buckets:
             chart.create_text(
                 width / 2,
-                height / 2,
+                top + plot_h / 2,
                 text="선택한 기간에 표시할 데이터가 없습니다.",
                 anchor=tk.CENTER,
                 fill=p["muted"],
                 font=("Segoe UI", 10),
             )
-            return
+        else:
+            max_total = max(sum(values.values()) for _label, _date, values in buckets) or 1
+            gap = 8
+            bar_w = max(10, min(40, (plot_w - gap * (len(buckets) + 1)) / max(1, len(buckets))))
+            step = (plot_w - bar_w) / max(1, len(buckets) - 1)
+            for index, (label, _key_date, values) in enumerate(buckets):
+                x = left + index * step
+                y_base = y_bottom
+                for key, _series_label, color in series:
+                    value = values.get(key, 0)
+                    if not value:
+                        continue
+                    segment_h = max(2, plot_h * (value / max_total))
+                    chart.create_rectangle(
+                        x,
+                        y_base - segment_h,
+                        x + bar_w,
+                        y_base,
+                        fill=color,
+                        outline=p["panel"],
+                    )
+                    y_base -= segment_h
+                if len(buckets) <= 18 or index % max(1, len(buckets) // 8) == 0:
+                    chart.create_line(x + bar_w / 2, y_bottom, x + bar_w / 2, y_bottom + 8, fill=p["line"])
+                    chart.create_text(
+                        x + bar_w / 2,
+                        y_bottom + 22,
+                        text=label,
+                        anchor=tk.N,
+                        fill=p["muted"],
+                        font=("Segoe UI", 9),
+                    )
 
-        max_total = max(sum(values.values()) for _label, values in buckets) or 1
-        gap = 10
-        bar_w = max(12, min(48, (plot_w - gap * (len(buckets) + 1)) / len(buckets)))
-        step = (plot_w - bar_w) / max(1, len(buckets) - 1)
-        for index, (label, values) in enumerate(buckets):
-            x = left + index * step
-            total = sum(values.values())
-            y_base = top + plot_h
-            for tier in ["1", "2", "3", "4", "needs_review"]:
-                value = values.get(tier, 0)
-                if not value:
-                    continue
-                segment_h = max(2, plot_h * (value / max_total))
-                chart.create_rectangle(
-                    x,
-                    y_base - segment_h,
-                    x + bar_w,
-                    y_base,
-                    fill=p[TIER_COLORS[tier]],
-                    outline=p["panel"],
-                )
-                y_base -= segment_h
-            chart.create_text(x + bar_w / 2, top + plot_h + 16, text=str(total), anchor=tk.CENTER, fill=p["muted"], font=("Segoe UI", 9))
-            if len(buckets) <= 18 or index % max(1, len(buckets) // 12) == 0:
-                chart.create_text(
-                    x + bar_w / 2,
-                    top + plot_h + 40,
-                    text=label,
-                    anchor=tk.N,
-                    fill=p["muted"],
-                    font=("Segoe UI", 8),
-                    angle=35 if len(buckets) > 8 else 0,
-                )
+            for ratio in [0, 0.5, 1.0]:
+                y = y_bottom - plot_h * ratio
+                value = max_total * ratio
+                label = f"{value:.1f}" if value and value != int(value) else str(int(value))
+                chart.create_line(left - 4, y, left + plot_w, y, fill=p["line"])
+                chart.create_text(left + plot_w + 12, y, text=label, anchor=tk.W, fill=p["muted"], font=("Segoe UI", 9))
 
-        for ratio in [0.25, 0.5, 0.75, 1.0]:
-            y = top + plot_h - plot_h * ratio
-            value = int(round(max_total * ratio))
-            chart.create_line(left - 4, y, left + plot_w, y, fill=p["line"])
-            chart.create_text(left - 10, y, text=str(value), anchor=tk.E, fill=p["muted"], font=("Segoe UI", 8))
+        self._draw_insight_cards(chart, rows, series, left, y_bottom + 76, width - left - right)
 
-    def _period_buckets(self, rows: list[dict[str, str]], group: str) -> list[tuple[str, dict[str, int]]]:
+    def _draw_insight_cards(
+        self,
+        chart: tk.Canvas,
+        rows: list[dict[str, str]],
+        series: list[tuple[str, str, str]],
+        left: int,
+        top: float,
+        available_w: int,
+    ) -> None:
+        p = self.palette
+        counts = {key: 0 for key, _label, _color in series}
+        for row in rows:
+            key = self._series_key_for_row(row, self.insight_dimension_var.get())
+            if key in counts:
+                counts[key] += 1
+        card_gap = 12
+        card_w = min(220, max(150, (available_w - card_gap * (len(series) - 1)) / max(1, len(series))))
+        for index, (key, label, color) in enumerate(series):
+            x = left + index * (card_w + card_gap)
+            if x + card_w > left + available_w + 1:
+                break
+            chart.create_rectangle(x, top, x + card_w, top + 88, fill=p["panel_alt"], outline=p["muted"], width=1)
+            chart.create_rectangle(x + 14, top + 22, x + 26, top + 34, fill=color, outline=color)
+            chart.create_text(x + 34, top + 28, text=label, anchor=tk.W, fill=p["muted"], font=("Segoe UI", 10))
+            chart.create_text(x + 14, top + 58, text=str(counts.get(key, 0)), anchor=tk.W, fill=p["ink"], font=("Segoe UI", 16, "bold"))
+
+    def _period_buckets(
+        self,
+        rows: list[dict[str, str]],
+        group: str,
+        series: list[tuple[str, str, str]],
+    ) -> list[tuple[str, dt.date, dict[str, int]]]:
         buckets: dict[str, dict[str, int]] = {}
         order: dict[str, dt.date] = {}
+        series_keys = [key for key, _label, _color in series]
+        start, end = self._bucket_bounds(rows)
+        if start and end:
+            for label, key_date in self._bucket_labels_between(start, end, group):
+                buckets[label] = {key: 0 for key in series_keys}
+                order[label] = key_date
         for row in rows:
             row_date = self._row_date(row)
             if not row_date:
                 continue
-            if group == "일별":
-                key_date = row_date
-                label = row_date.strftime("%m/%d")
-            elif group == "주별":
-                year, week, _weekday = row_date.isocalendar()
-                key_date = dt.date.fromisocalendar(year, week, 1)
-                label = f"{year}-W{week:02d}"
-            else:
-                key_date = dt.date(row_date.year, row_date.month, 1)
-                label = key_date.strftime("%Y-%m")
+            label, key_date = self._bucket_label(row_date, group)
             if label not in buckets:
-                buckets[label] = {"1": 0, "2": 0, "3": 0, "4": 0, "needs_review": 0}
+                buckets[label] = {key: 0 for key in series_keys}
                 order[label] = key_date
+            bucket_key = self._series_key_for_row(row, self.insight_dimension_var.get())
+            if bucket_key in buckets[label]:
+                buckets[label][bucket_key] += 1
+        return [(label, order[label], buckets[label]) for label in sorted(buckets, key=lambda item: order[item])]
+
+    def _insight_series(self) -> list[tuple[str, str, str]]:
+        dimension = self.insight_dimension_var.get()
+        if dimension == "멤버십 등급":
+            return [
+                ("tier_1", "티어 1", SERIES_COLORS[0]),
+                ("tier_2", "티어 2", SERIES_COLORS[1]),
+                ("tier_3", "티어 3", SERIES_COLORS[2]),
+                ("tier_4", "티어 4", SERIES_COLORS[3]),
+                ("tier_review", "확인필요", SERIES_COLORS[4]),
+            ]
+        if dimension == "청구 주기":
+            return [
+                ("monthly", "월간", SERIES_COLORS[0]),
+                ("annual", "연간", SERIES_COLORS[1]),
+            ]
+        if dimension == "결제 상태":
+            return [
+                ("paid_active", "유료 (활성 상태)", SERIES_COLORS[0]),
+                ("retry_complete", "결제 완료 (재시도)", SERIES_COLORS[1]),
+                ("gift_other", "선물 (타인)", SERIES_COLORS[2]),
+                ("gift_self", "선물 (본인)", SERIES_COLORS[3]),
+            ]
+        if dimension == "유료로 전환하는 경로":
+            return [
+                ("email", "메일", SERIES_COLORS[0]),
+                ("other_path", "기타", SERIES_COLORS[1]),
+            ]
+        return [("new_member", "신규 회원", SERIES_COLORS[0])]
+
+    def _series_key_for_row(self, row: dict[str, str], dimension: str) -> str:
+        if dimension == "멤버십 등급":
             tier = row.get("tier", "")
-            bucket_key = tier if tier in {"1", "2", "3", "4"} else "needs_review"
-            buckets[label][bucket_key] += 1
-        return [(label, buckets[label]) for label in sorted(buckets, key=lambda item: order[item])]
+            return f"tier_{tier}" if tier in {"1", "2", "3", "4"} else "tier_review"
+        if dimension == "청구 주기":
+            return "annual" if self._billing_cycle_label(row) == "연간" else "monthly"
+        if dimension == "결제 상태":
+            status = self._payment_status_label(row)
+            if status == "결제 완료 (재시도)":
+                return "retry_complete"
+            if status == "선물 (타인)":
+                return "gift_other"
+            if status == "선물 (본인)":
+                return "gift_self"
+            return "paid_active"
+        if dimension == "유료로 전환하는 경로":
+            return "email" if self._conversion_path_label(row) == "메일" else "other_path"
+        return "new_member"
+
+    def _bucket_bounds(self, rows: list[dict[str, str]]) -> tuple[dt.date | None, dt.date | None]:
+        row_dates = [row_date for row in rows if (row_date := self._row_date(row))]
+        start = self.current_start_date or (min(row_dates) if row_dates else None)
+        end = self.current_end_date or (max(row_dates) if row_dates else None)
+        if start and end and start > end:
+            return end, start
+        return start, end
+
+    def _bucket_labels_between(self, start: dt.date, end: dt.date, group: str) -> list[tuple[str, dt.date]]:
+        labels: list[tuple[str, dt.date]] = []
+        if group == "매일":
+            if (end - start).days > 400:
+                start = end - dt.timedelta(days=400)
+            current = start
+            while current <= end:
+                labels.append(self._bucket_label(current, group))
+                current += dt.timedelta(days=1)
+            return labels
+        if group == "매주":
+            year, week, _weekday = start.isocalendar()
+            current = dt.date.fromisocalendar(year, week, 1)
+            while current <= end:
+                labels.append(self._bucket_label(current, group))
+                current += dt.timedelta(days=7)
+            return labels
+        current = dt.date(start.year, start.month, 1)
+        while current <= end:
+            labels.append(self._bucket_label(current, group))
+            if current.month == 12:
+                current = dt.date(current.year + 1, 1, 1)
+            else:
+                current = dt.date(current.year, current.month + 1, 1)
+        return labels
+
+    def _bucket_label(self, row_date: dt.date, group: str) -> tuple[str, dt.date]:
+        if group == "매일":
+            return row_date.strftime("%m. %d."), row_date
+        if group == "매주":
+            year, week, _weekday = row_date.isocalendar()
+            key_date = dt.date.fromisocalendar(year, week, 1)
+            return key_date.strftime("%m. %d."), key_date
+        key_date = dt.date(row_date.year, row_date.month, 1)
+        return key_date.strftime("%Y-%m"), key_date
 
     def _tier_counts(self, rows: list[dict[str, str]]) -> dict[str, int]:
         counts = {"1": 0, "2": 0, "3": 0, "4": 0, "needs_review": 0}
@@ -845,6 +1093,51 @@ class PatreonMemberApp(tk.Tk):
         except ValueError:
             return "invalid"
 
+    def _apply_range_preset_to_entries(self) -> None:
+        preset = self.range_var.get()
+        start, end = self._range_dates(preset)
+        if preset != "사용자 지정":
+            self.after_var.set("" if start is None else start.strftime("%Y/%m/%d"))
+            self.before_var.set("" if end is None else end.strftime("%Y/%m/%d"))
+        state = tk.NORMAL if preset == "사용자 지정" else tk.DISABLED
+        if hasattr(self, "after_entry"):
+            self.after_entry.configure(state=state)
+        if hasattr(self, "before_entry"):
+            self.before_entry.configure(state=state)
+
+    def _range_dates(self, preset: str) -> tuple[dt.date | None | str, dt.date | None | str]:
+        today = dt.date.today()
+        if preset == "지난 24시간":
+            return today - dt.timedelta(days=1), today
+        if preset == "지난 30일":
+            return today - dt.timedelta(days=29), today
+        if preset == "지난 6개월":
+            return add_months(today, -6), today
+        if preset == "지난 12개월":
+            return add_months(today, -12), today
+        if preset == "전체":
+            return None, None
+        return self._parse_custom_range_dates()
+
+    def _parse_custom_range_dates(self) -> tuple[dt.date | None | str, dt.date | None | str]:
+        start = self._parse_date_text(self.after_var.get().strip())
+        end = self._parse_date_text(self.before_var.get().strip())
+        return start, end
+
+    def _gmail_query_date_texts(self) -> tuple[str, str]:
+        if self.range_var.get() != "사용자 지정":
+            self._apply_range_preset_to_entries()
+        start = self._parse_date_text(self.after_var.get().strip())
+        end = self._parse_date_text(self.before_var.get().strip())
+        if start == "invalid" or end == "invalid":
+            return "invalid", "invalid"
+        after_text = start.strftime("%Y/%m/%d") if isinstance(start, dt.date) else ""
+        if isinstance(end, dt.date):
+            before_text = (end + dt.timedelta(days=1)).strftime("%Y/%m/%d")
+        else:
+            before_text = ""
+        return after_text, before_text
+
     def open_output_folder(self) -> None:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(["explorer", str(OUTPUT_DIR)])
@@ -865,6 +1158,20 @@ def main() -> int:
     app = PatreonMemberApp()
     app.mainloop()
     return 0
+
+
+def add_months(value: dt.date, months: int) -> dt.date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, days_in_month(year, month))
+    return dt.date(year, month, day)
+
+
+def days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        return 31
+    return (dt.date(year, month + 1, 1) - dt.timedelta(days=1)).day
 
 
 def load_app_settings(path: Path) -> dict[str, object]:
