@@ -46,8 +46,8 @@ PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 ASSETS_DIR = APP_DIR / "assets"
-APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon.ico"
-APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon.png"
+APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v2.ico"
+APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v2.png"
 
 TABLE_COLUMNS = [
     ("event_type", "항목", 110),
@@ -412,6 +412,8 @@ class PatreonMemberApp(tk.Tk):
                 self.iconbitmap(default=str(APP_ICON_PATH))
             except tk.TclError:
                 pass
+        if sys.platform == "win32":
+            return
         if APP_ICON_PNG_PATH.exists():
             try:
                 self._icon_image = tk.PhotoImage(file=str(APP_ICON_PNG_PATH))

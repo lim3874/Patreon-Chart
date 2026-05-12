@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2 - 2026-05-12
+
+### Fixed
+
+- Replace the app icon with a small-size-optimized chart icon so it stays clear on the Windows taskbar.
+- Package explicit 16, 24, 32, 48, 64, 128, and 256 px frames in the ICO file instead of relying on a single downscaled source image.
+- Use the ICO directly on Windows so Tk does not downscale the large PNG for the taskbar icon.
+
 ## 1.2.1 - 2026-05-12
 
 ### Added
