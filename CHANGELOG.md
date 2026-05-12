@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.1 - 2026-05-12
+
+### Fixed
+
+- Center period chart bars when the selected group has only a few buckets, such as monthly charts with two months.
+
 ## 2.6.0 - 2026-05-12
 
 ### Changed

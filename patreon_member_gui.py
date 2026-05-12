@@ -1735,15 +1735,22 @@ class PatreonMemberApp(tk.Tk):
             max_total = max(
                 [value for _label, _date, values in buckets for value in values.values()] + [1]
             )
-            slot_w = plot_w / max(1, len(buckets))
             series_count = max(1, len(series))
-            group_gap = 8
             series_gap = 3 if series_count > 1 else 0
-            group_w = max(8, slot_w - group_gap)
-            bar_w = max(3, min(40, (group_w - series_gap * (series_count - 1)) / series_count))
-            actual_group_w = bar_w * series_count + series_gap * (series_count - 1)
+            if len(buckets) <= 8:
+                bar_w = 30 if series_count == 1 else max(8, min(22, 54 / series_count))
+                actual_group_w = bar_w * series_count + series_gap * (series_count - 1)
+                slot_w = max(72, actual_group_w + 46)
+                plot_start = left + max(0, (plot_w - slot_w * len(buckets)) / 2)
+            else:
+                slot_w = plot_w / max(1, len(buckets))
+                group_gap = 8
+                group_w = max(8, slot_w - group_gap)
+                bar_w = max(3, min(40, (group_w - series_gap * (series_count - 1)) / series_count))
+                actual_group_w = bar_w * series_count + series_gap * (series_count - 1)
+                plot_start = left
             for index, (label, _key_date, values) in enumerate(buckets):
-                slot_x = left + index * slot_w
+                slot_x = plot_start + index * slot_w
                 group_x = slot_x + (slot_w - actual_group_w) / 2
                 for series_index, (key, _series_label, color) in enumerate(series):
                     value = values.get(key, 0)
