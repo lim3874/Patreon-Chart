@@ -172,6 +172,8 @@ class PatreonMemberApp(tk.Tk):
         self.loading_after_id: str | None = None
         self.loading_frame_index = 0
         self.loading_context: str | None = None
+        self.patreon_sort_column: str | None = None
+        self.patreon_sort_descending = False
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.app_settings["dark_mode"] = True
@@ -909,7 +911,11 @@ class PatreonMemberApp(tk.Tk):
             selectmode="browse",
         )
         for column, label, width in PATREON_TABLE_COLUMNS:
-            self.patreon_tree.heading(column, text=label)
+            self.patreon_tree.heading(
+                column,
+                text=label,
+                command=lambda selected=column: self._sort_patreon_by_column(selected),
+            )
             self.patreon_tree.column(column, width=width, minwidth=70, anchor=tk.W)
         y_scroll = ttk.Scrollbar(table_wrap, orient=tk.VERTICAL, command=self.patreon_tree.yview)
         x_scroll = ttk.Scrollbar(table_wrap, orient=tk.HORIZONTAL, command=self.patreon_tree.xview)
@@ -1403,9 +1409,11 @@ class PatreonMemberApp(tk.Tk):
         self.count_var.set(f"{len(rows)}명")
 
     def _set_patreon_rows(self, rows: list[dict[str, str]]) -> None:
+        self._refresh_patreon_headings()
+        display_rows = self._sorted_patreon_rows(rows)
         for item in self.patreon_tree.get_children():
             self.patreon_tree.delete(item)
-        for index, row in enumerate(rows):
+        for index, row in enumerate(display_rows):
             tags = []
             if index % 2:
                 tags.append("alt")
@@ -1422,6 +1430,75 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_metric_vars["active"].set(str(counts["active_patron"]))
         self.patreon_metric_vars["declined"].set(str(counts["declined_patron"]))
         self.patreon_metric_vars["former"].set(str(counts["former_patron"]))
+
+    def _sort_patreon_by_column(self, column: str) -> None:
+        if self.patreon_sort_column == column:
+            self.patreon_sort_descending = not self.patreon_sort_descending
+        else:
+            self.patreon_sort_column = column
+            self.patreon_sort_descending = False
+        self._set_patreon_rows(self.patreon_rows)
+
+    def _refresh_patreon_headings(self) -> None:
+        if not hasattr(self, "patreon_tree"):
+            return
+        marker = " ▼" if self.patreon_sort_descending else " ▲"
+        for column, label, _width in PATREON_TABLE_COLUMNS:
+            text = f"{label}{marker}" if column == self.patreon_sort_column else label
+            self.patreon_tree.heading(
+                column,
+                text=text,
+                command=lambda selected=column: self._sort_patreon_by_column(selected),
+            )
+
+    def _sorted_patreon_rows(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        column = self.patreon_sort_column
+        if not column:
+            return list(rows)
+        filled: list[dict[str, str]] = []
+        empty: list[dict[str, str]] = []
+        for row in rows:
+            if row.get(column, "").strip():
+                filled.append(row)
+            else:
+                empty.append(row)
+        filled.sort(key=lambda row: self._patreon_sort_value(row, column), reverse=self.patreon_sort_descending)
+        return filled + empty
+
+    def _patreon_sort_value(self, row: dict[str, str], column: str) -> object:
+        value = row.get(column, "").strip()
+        if column == "currently_entitled_amount_cents":
+            try:
+                return float(value.replace(",", ""))
+            except ValueError:
+                return 0.0
+        if column in {"last_charge_date", "pledge_relationship_start"}:
+            return self._parse_patreon_datetime(value) or dt.datetime.min
+        if column == "tier_title":
+            return self._patreon_tier_sort_value(value)
+        return self._patreon_table_value(row, column).casefold()
+
+    def _parse_patreon_datetime(self, value: str) -> dt.datetime | None:
+        if not value:
+            return None
+        normalized = value.replace("Z", "+00:00")
+        try:
+            parsed = dt.datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is not None:
+            return parsed.astimezone().replace(tzinfo=None)
+        return parsed
+
+    def _patreon_tier_sort_value(self, value: str) -> tuple[int, str]:
+        normalized = value.strip().casefold()
+        if normalized == "free":
+            return (0, normalized)
+        if normalized.startswith("tier "):
+            suffix = normalized.removeprefix("tier ").strip()
+            if suffix.isdigit():
+                return (int(suffix), normalized)
+        return (999, normalized)
 
     def _patreon_table_value(self, row: dict[str, str], column: str) -> str:
         value = row.get(column, "")

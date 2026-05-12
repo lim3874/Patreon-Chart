@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0 - 2026-05-12
+
+### Added
+
+- Add clickable sorting to Patreon API table headers.
+- Toggle Patreon API table columns between ascending and descending order with repeated header clicks.
+- Sort Patreon API amount and date columns using numeric/date values instead of plain text.
+
 ## 2.4.0 - 2026-05-12
 
 ### Added
