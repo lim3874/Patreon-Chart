@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import queue
 import subprocess
+import sys
 import threading
 import traceback
 from pathlib import Path
@@ -44,6 +45,9 @@ CACHE_PATH = APP_DIR / ".cache" / "rates.json"
 PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
+ASSETS_DIR = APP_DIR / "assets"
+APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon.ico"
+APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon.png"
 
 TABLE_COLUMNS = [
     ("event_type", "항목", 110),
@@ -128,6 +132,8 @@ class PatreonMemberApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Patreon Gmail Member Exporter")
+        self._icon_image: tk.PhotoImage | None = None
+        self._apply_window_icon()
         self.geometry("1240x820")
         self.minsize(1040, 660)
 
@@ -399,6 +405,19 @@ class PatreonMemberApp(tk.Tk):
         self._build_period_tab()
         self._build_table_tab()
         self._build_patreon_tab()
+
+    def _apply_window_icon(self) -> None:
+        if APP_ICON_PATH.exists():
+            try:
+                self.iconbitmap(default=str(APP_ICON_PATH))
+            except tk.TclError:
+                pass
+        if APP_ICON_PNG_PATH.exists():
+            try:
+                self._icon_image = tk.PhotoImage(file=str(APP_ICON_PNG_PATH))
+                self.iconphoto(True, self._icon_image)
+            except tk.TclError:
+                self._icon_image = None
 
     def _build_summary_tab(self) -> None:
         self.metrics_frame = ttk.Frame(self.summary_tab)
@@ -1299,9 +1318,21 @@ class PatreonMemberApp(tk.Tk):
 
 
 def main() -> int:
+    set_windows_app_id()
     app = PatreonMemberApp()
     app.mainloop()
     return 0
+
+
+def set_windows_app_id() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("lim3874.PatreonChart.MemberExporter")
+    except Exception:
+        pass
 
 
 def add_months(value: dt.date, months: int) -> dt.date:

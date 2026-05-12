@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 - 2026-05-12
+
+### Added
+
+- Add a chart-style app icon in PNG and ICO formats.
+- Apply the chart icon to the desktop window and Windows taskbar at runtime.
+
+### Changed
+
+- Update Windows app identity so the taskbar uses the app-specific icon instead of the default Python/Tk icon.
+
 ## 1.2.0 - 2026-05-12
 
 ### Changed
