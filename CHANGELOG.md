@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.0 - 2026-05-12
+
+### Added
+
+- Add `멤버순` and `티어순` sorting controls to the tier distribution chart.
+- Persist the selected tier distribution sort mode in local app settings.
+
+### Changed
+
+- Show the actual selected date span on the `전체 회원` summary card instead of the generic `선택 기간` text.
+- Move `티어 1`, `티어 2`, and `티어 3` summary cards to the second row.
+- Remove the `확인 필요` summary card from the top summary area.
+
 ## 2.2.1 - 2026-05-12
 
 ### Fixed

@@ -200,6 +200,13 @@ class PatreonMemberApp(tk.Tk):
         self.search_var = tk.StringVar(value="")
         self.status_filter_var = tk.StringVar(value="상태: 전체")
         self.tier_filter_var = tk.StringVar(value="전체 티어")
+        self.tier_sort_var = tk.StringVar(value=str(self.app_settings.get("tier_sort", "멤버순")))
+        if self.tier_sort_var.get() in {"member_count", "members"}:
+            self.tier_sort_var.set("멤버순")
+        elif self.tier_sort_var.get() == "tier":
+            self.tier_sort_var.set("티어순")
+        if self.tier_sort_var.get() not in {"멤버순", "티어순"}:
+            self.tier_sort_var.set("멤버순")
         self.after_var = tk.StringVar(value="")
         self.before_var = tk.StringVar(value="")
         self.current_start_date: dt.date | None = None
@@ -400,6 +407,9 @@ class PatreonMemberApp(tk.Tk):
             "tier3": tk.StringVar(value="0"),
             "tier4": tk.StringVar(value="0"),
             "review": tk.StringVar(value="0"),
+        }
+        self.metric_detail_vars = {
+            "total": tk.StringVar(value="전체 기간"),
         }
         self.patreon_metric_vars = {
             "total": tk.StringVar(value="0"),
@@ -649,30 +659,54 @@ class PatreonMemberApp(tk.Tk):
         for column in range(3):
             self.summary_tab.columnconfigure(column, weight=1, uniform="summary_cards")
         self.summary_tab.rowconfigure(2, weight=1)
-        for index, (label, key, detail, color_key) in enumerate(
-            [
-                ("전체 회원", "total", "선택 기간", "success"),
-                ("재구독", "rejoin", "반복 가입", "success"),
-                ("티어 2", "tier2", "회원", "accent"),
-                ("티어 1", "tier1", "회원", "accent_2"),
-                ("티어 3", "tier3", "회원", "accent_4"),
-                ("확인 필요", "review", "조치 필요", "review"),
-            ]
-        ):
+        summary_cards = [
+            (0, 0, 2, "전체 회원", "total", self.metric_detail_vars["total"], "success"),
+            (0, 2, 1, "재구독", "rejoin", "반복 가입", "success"),
+            (1, 0, 1, "티어 1", "tier1", "회원", "accent_2"),
+            (1, 1, 1, "티어 2", "tier2", "회원", "accent"),
+            (1, 2, 1, "티어 3", "tier3", "회원", "accent_4"),
+        ]
+        for row, column, columnspan, label, key, detail, color_key in summary_cards:
             card = self._metric_card(self.summary_tab, label, self.metric_vars[key], detail, color_key)
-            card.grid(row=index // 3, column=index % 3, sticky="nsew", padx=(0 if index % 3 == 0 else 10, 0), pady=(0, 18))
+            card.grid(
+                row=row,
+                column=column,
+                columnspan=columnspan,
+                sticky="nsew",
+                padx=(0 if column == 0 else 10, 0),
+                pady=(0, 18),
+            )
 
         chart_panel = self._card_frame(self.summary_tab)
         chart_panel.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(22, 0))
         chart_panel.rowconfigure(1, weight=1)
         chart_panel.columnconfigure(0, weight=1)
+        header = tk.Frame(chart_panel, bg=self.palette["panel"])
+        header.grid(row=0, column=0, sticky="ew", padx=24, pady=(22, 10))
         tk.Label(
-            chart_panel,
+            header,
             text="티어 분포",
             bg=self.palette["panel"],
             fg=self.palette["ink"],
             font=("Segoe UI", 16, "bold"),
-        ).grid(row=0, column=0, sticky="w", padx=24, pady=(22, 10))
+        ).pack(side=tk.LEFT)
+        sort_group = tk.Frame(header, bg=self.palette["panel_alt"])
+        sort_group.pack(side=tk.RIGHT)
+        self.tier_sort_buttons: dict[str, tk.Button] = {}
+        for option in ["멤버순", "티어순"]:
+            button = tk.Button(
+                sort_group,
+                text=option,
+                command=lambda value=option: self._select_tier_sort(value),
+                bd=0,
+                padx=15,
+                pady=8,
+                cursor="hand2",
+                font=("Segoe UI", 10, "bold" if option == self.tier_sort_var.get() else "normal"),
+            )
+            button.pack(side=tk.LEFT, padx=2, pady=2)
+            self.tier_sort_buttons[option] = button
+        self._refresh_tier_sort_buttons()
         self.tier_chart = tk.Canvas(chart_panel, height=310, bg=self.palette["panel"], highlightthickness=0)
         self.tier_chart.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 22))
         self.tier_chart.bind("<Configure>", lambda _event: self._draw_tier_chart(self.visible_rows))
@@ -893,7 +927,7 @@ class PatreonMemberApp(tk.Tk):
         parent: tk.Frame,
         label: str,
         value_var: tk.StringVar,
-        detail: str = "",
+        detail: str | tk.StringVar = "",
         color_key: str = "accent",
     ) -> tk.Frame:
         frame = self._card_frame(parent)
@@ -916,13 +950,16 @@ class PatreonMemberApp(tk.Tk):
             font=("Segoe UI", 24, "bold"),
         ).pack(side=tk.LEFT)
         if detail:
-            tk.Label(
-                row,
-                text=f"  {detail}",
-                bg=self.palette["panel"],
-                fg=self.palette["success"] if detail.startswith("↑") else self.palette["ink"],
-                font=("Segoe UI", 11),
-            ).pack(side=tk.LEFT, pady=(8, 0))
+            label_kwargs = {
+                "bg": self.palette["panel"],
+                "fg": self.palette["success"] if isinstance(detail, str) and detail.startswith("↑") else self.palette["ink"],
+                "font": ("Segoe UI", 11),
+            }
+            if isinstance(detail, tk.StringVar):
+                detail_label = tk.Label(row, textvariable=detail, **label_kwargs)
+            else:
+                detail_label = tk.Label(row, text=f"  {detail}", **label_kwargs)
+            detail_label.pack(side=tk.LEFT, pady=(8, 0), padx=(8 if isinstance(detail, tk.StringVar) else 0, 0))
         bar = tk.Frame(frame, bg=self.palette["track"], height=5)
         bar.pack(side=tk.BOTTOM, fill=tk.X, padx=22, pady=(0, 22))
         fill = tk.Frame(bar, bg=self.palette.get(color_key, self.palette["accent"]), height=5)
@@ -959,6 +996,26 @@ class PatreonMemberApp(tk.Tk):
             return
         for group, button in self.group_buttons.items():
             selected = group == self.group_var.get()
+            button.configure(
+                bg=self.palette["control_bg"] if selected else self.palette["panel_alt"],
+                fg=self.palette["ink"] if selected else self.palette["muted"],
+                activebackground=self.palette["select_bg"],
+                activeforeground=self.palette["ink"],
+                font=("Segoe UI", 10, "bold" if selected else "normal"),
+            )
+
+    def _select_tier_sort(self, sort_mode: str) -> None:
+        self.tier_sort_var.set(sort_mode)
+        self.app_settings["tier_sort"] = sort_mode
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._refresh_tier_sort_buttons()
+        self._draw_tier_chart(self.visible_rows)
+
+    def _refresh_tier_sort_buttons(self) -> None:
+        if not hasattr(self, "tier_sort_buttons"):
+            return
+        for sort_mode, button in self.tier_sort_buttons.items():
+            selected = sort_mode == self.tier_sort_var.get()
             button.configure(
                 bg=self.palette["control_bg"] if selected else self.palette["panel_alt"],
                 fg=self.palette["ink"] if selected else self.palette["muted"],
@@ -1095,10 +1152,25 @@ class PatreonMemberApp(tk.Tk):
         self.current_end_date = end if isinstance(end, dt.date) else None
         self.visible_rows = [row for row in self.rows if self._row_in_period(row, start, end)]
         self._update_metrics(self.visible_rows)
+        self._update_period_summary_label()
         self._draw_tier_chart(self.visible_rows)
         self._draw_period_chart(self.visible_rows)
         self._refresh_table()
         self.status_var.set(f"표시 중: {len(self.visible_rows)}명 / 전체 {len(self.rows)}명")
+
+    def _update_period_summary_label(self) -> None:
+        self.metric_detail_vars["total"].set(self._period_summary_label())
+
+    def _period_summary_label(self) -> str:
+        start = self.current_start_date
+        end = self.current_end_date
+        if start and end:
+            return f"{start:%Y/%m/%d} - {end:%Y/%m/%d}"
+        if start:
+            return f"{start:%Y/%m/%d} 이후"
+        if end:
+            return f"{end:%Y/%m/%d}까지"
+        return "전체 기간"
 
     def refresh_from_gmail(self) -> None:
         if self.is_running:
@@ -1476,22 +1548,25 @@ class PatreonMemberApp(tk.Tk):
         chart.delete("all")
         counts = self._tier_counts(rows)
         data = [
-            ("티어 1", counts["1"], p[TIER_COLORS["1"]]),
-            ("티어 2", counts["2"], p[TIER_COLORS["2"]]),
-            ("티어 3", counts["3"], p[TIER_COLORS["3"]]),
-            ("티어 4", counts["4"], p[TIER_COLORS["4"]]),
+            (1, "티어 1", counts["1"], p[TIER_COLORS["1"]]),
+            (2, "티어 2", counts["2"], p[TIER_COLORS["2"]]),
+            (3, "티어 3", counts["3"], p[TIER_COLORS["3"]]),
+            (4, "티어 4", counts["4"], p[TIER_COLORS["4"]]),
         ]
-        data.sort(key=lambda item: item[1], reverse=True)
+        if self.tier_sort_var.get() == "멤버순":
+            data.sort(key=lambda item: (-item[2], item[0]))
+        else:
+            data.sort(key=lambda item: item[0])
         width = max(chart.winfo_width(), 420)
         height = max(chart.winfo_height(), 300)
-        max_count = max([count for _, count, _ in data] + [1])
+        max_count = max([count for _tier, _label, count, _color in data] + [1])
         left = 140
         right_pad = 70
         bar_w = max(160, width - left - right_pad)
         top = 28
         row_h = max(52, min(70, (height - 44) // max(1, len(data))))
         chart.create_line(0, 0, width, 0, fill=p["line"])
-        for index, (label, count, color) in enumerate(data):
+        for index, (_tier, label, count, color) in enumerate(data):
             y = top + index * row_h
             fill_width = int(bar_w * (count / max_count)) if max_count else 0
             chart.create_text(0, y + 17, text=label, anchor=tk.W, fill=p["ink"], font=("Segoe UI", 11))
