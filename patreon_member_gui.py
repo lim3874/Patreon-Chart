@@ -1732,31 +1732,38 @@ class PatreonMemberApp(tk.Tk):
                 font=("Malgun Gothic", 10),
             )
         else:
-            max_total = max(sum(values.values()) for _label, _date, values in buckets) or 1
-            gap = 8
-            bar_w = max(10, min(40, (plot_w - gap * (len(buckets) + 1)) / max(1, len(buckets))))
-            step = (plot_w - bar_w) / max(1, len(buckets) - 1)
+            max_total = max(
+                [value for _label, _date, values in buckets for value in values.values()] + [1]
+            )
+            slot_w = plot_w / max(1, len(buckets))
+            series_count = max(1, len(series))
+            group_gap = 8
+            series_gap = 3 if series_count > 1 else 0
+            group_w = max(8, slot_w - group_gap)
+            bar_w = max(3, min(40, (group_w - series_gap * (series_count - 1)) / series_count))
+            actual_group_w = bar_w * series_count + series_gap * (series_count - 1)
             for index, (label, _key_date, values) in enumerate(buckets):
-                x = left + index * step
-                y_base = y_bottom
-                for key, _series_label, color in series:
+                slot_x = left + index * slot_w
+                group_x = slot_x + (slot_w - actual_group_w) / 2
+                for series_index, (key, _series_label, color) in enumerate(series):
                     value = values.get(key, 0)
                     if not value:
                         continue
+                    x = group_x + series_index * (bar_w + series_gap)
                     segment_h = max(2, plot_h * (value / max_total))
                     chart.create_rectangle(
                         x,
-                        y_base - segment_h,
+                        y_bottom - segment_h,
                         x + bar_w,
-                        y_base,
+                        y_bottom,
                         fill=color,
                         outline=p["panel"],
                     )
-                    y_base -= segment_h
                 if len(buckets) <= 18 or index % max(1, len(buckets) // 8) == 0:
-                    chart.create_line(x + bar_w / 2, y_bottom, x + bar_w / 2, y_bottom + 8, fill=p["line"])
+                    label_x = slot_x + slot_w / 2
+                    chart.create_line(label_x, y_bottom, label_x, y_bottom + 8, fill=p["line"])
                     chart.create_text(
-                        x + bar_w / 2,
+                        label_x,
                         y_bottom + 22,
                         text=label,
                         anchor=tk.N,
@@ -1830,7 +1837,6 @@ class PatreonMemberApp(tk.Tk):
         dimension = self.insight_dimension_var.get()
         if dimension in {"재구독", "Rejoins"}:
             return [
-                ("first_pledge", "첫 가입", SERIES_COLORS[0]),
                 ("rejoin", "재구독", SERIES_COLORS[1]),
             ]
         if dimension in {"멤버십 등급", "Membership Tier"}:

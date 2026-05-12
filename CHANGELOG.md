@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.0 - 2026-05-12
+
+### Changed
+
+- Change the `재구독` period chart to show only rejoined-member counts instead of stacking first pledges with rejoins.
+- Draw multi-series period charts as separate category bars instead of stacked total bars.
+
 ## 2.5.0 - 2026-05-12
 
 ### Added
