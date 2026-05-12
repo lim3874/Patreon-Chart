@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0 - 2026-05-12
+
+### Changed
+
+- Redesign the desktop dashboard with a Patreon-style dark layout:
+  - stronger dark background
+  - beige panel borders
+  - square tab styling
+  - dark rectangular action buttons
+  - denser Patreon API member table view
+- Make dark mode the default for new local settings so the first launch matches the dashboard design.
+- Use Korean-friendly UI fonts across labels, buttons, charts, and tables.
+
+### Fixed
+
+- Improve dark-mode readability for combobox dropdowns, readonly date fields, tree headings, and chart labels.
+- Keep chart category buttons readable in both selected and unselected dark-mode states.
+
 ## 1.1.1 - 2026-05-12
 
 ### Fixed

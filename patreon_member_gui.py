@@ -71,39 +71,43 @@ PATREON_TABLE_COLUMNS = [
 ]
 
 LIGHT_THEME = {
-    "bg": "#f5f6f8",
+    "bg": "#eef2f6",
     "panel": "#ffffff",
-    "panel_alt": "#f0f3f7",
+    "panel_alt": "#e7edf5",
     "ink": "#172033",
     "muted": "#667085",
-    "line": "#d9dee8",
-    "accent": "#0f766e",
-    "accent_2": "#2563eb",
-    "accent_3": "#7c3aed",
-    "accent_4": "#dc2626",
-    "review": "#a16207",
-    "track": "#eef2f6",
+    "line": "#8d8a85",
+    "accent": "#338ccf",
+    "accent_2": "#ffb77c",
+    "accent_3": "#88df3f",
+    "accent_4": "#ffe047",
+    "review": "#a78bfa",
+    "track": "#dbe4ef",
     "table_review": "#fff7ed",
     "select_bg": "#cce7ff",
     "select_fg": "#172033",
+    "tab_selected": "#ffffff",
+    "control_bg": "#ffffff",
 }
 
 DARK_THEME = {
-    "bg": "#0f141d",
-    "panel": "#171d29",
-    "panel_alt": "#202938",
-    "ink": "#e5e7eb",
-    "muted": "#9ca3af",
-    "line": "#2f3a4c",
-    "accent": "#2dd4bf",
-    "accent_2": "#60a5fa",
-    "accent_3": "#a78bfa",
-    "accent_4": "#f87171",
-    "review": "#fbbf24",
-    "track": "#263244",
-    "table_review": "#3b2f14",
-    "select_bg": "#164e63",
+    "bg": "#0d121b",
+    "panel": "#151c29",
+    "panel_alt": "#1b2434",
+    "ink": "#f1eee8",
+    "muted": "#918e8b",
+    "line": "#a4a09a",
+    "accent": "#338ccf",
+    "accent_2": "#ffb77c",
+    "accent_3": "#88df3f",
+    "accent_4": "#ffe047",
+    "review": "#a78bfa",
+    "track": "#243044",
+    "table_review": "#2b241a",
+    "select_bg": "#23374d",
     "select_fg": "#f8fafc",
+    "tab_selected": "#151c29",
+    "control_bg": "#1b2434",
 }
 
 TIER_COLORS = {
@@ -124,7 +128,7 @@ class PatreonMemberApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Patreon Gmail Member Exporter")
-        self.geometry("1220x800")
+        self.geometry("1240x820")
         self.minsize(1040, 660)
 
         self.rows: list[dict[str, str]] = []
@@ -134,7 +138,7 @@ class PatreonMemberApp(tk.Tk):
         self.is_running = False
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
-        self.dark_mode_var = tk.BooleanVar(value=bool(self.app_settings.get("dark_mode", False)))
+        self.dark_mode_var = tk.BooleanVar(value=bool(self.app_settings.get("dark_mode", True)))
         self.range_var = tk.StringVar(value=str(self.app_settings.get("range_preset", "지난 30일")))
         if self.range_var.get() not in RANGE_PRESETS:
             self.range_var.set("지난 30일")
@@ -161,31 +165,58 @@ class PatreonMemberApp(tk.Tk):
         self.palette = DARK_THEME if self.dark_mode_var.get() else LIGHT_THEME
         p = self.palette
         self.configure(bg=p["bg"])
+        self.option_add("*TCombobox*Listbox.background", p["panel"])
+        self.option_add("*TCombobox*Listbox.foreground", p["ink"])
+        self.option_add("*TCombobox*Listbox.selectBackground", p["select_bg"])
+        self.option_add("*TCombobox*Listbox.selectForeground", p["select_fg"])
+        self.option_add("*TCombobox*Listbox.font", ("Malgun Gothic", 10))
         style = ttk.Style(self)
         try:
             style.theme_use("clam")
         except tk.TclError:
             pass
+        base_font = ("Malgun Gothic", 10)
+        style.configure(".", font=base_font)
         style.configure("TFrame", background=p["bg"])
-        style.configure("Panel.TFrame", background=p["panel"], relief="solid", borderwidth=1)
-        style.configure("Subtle.TFrame", background=p["panel_alt"])
-        style.configure("TLabel", background=p["bg"], foreground=p["ink"])
-        style.configure("Panel.TLabel", background=p["panel"], foreground=p["ink"])
-        style.configure("Muted.TLabel", background=p["bg"], foreground=p["muted"])
-        style.configure("PanelMuted.TLabel", background=p["panel"], foreground=p["muted"])
-        style.configure("Title.TLabel", background=p["bg"], foreground=p["ink"], font=("Segoe UI", 18, "bold"))
-        style.configure("MetricTitle.TLabel", background=p["panel"], foreground=p["muted"], font=("Segoe UI", 10))
-        style.configure("MetricValue.TLabel", background=p["panel"], foreground=p["ink"], font=("Segoe UI", 22, "bold"))
         style.configure(
-            "TButton",
-            padding=(12, 7),
-            font=("Segoe UI", 10),
-            background=p["panel_alt"],
-            foreground=p["ink"],
+            "Panel.TFrame",
+            background=p["panel"],
+            relief="solid",
+            borderwidth=2,
             bordercolor=p["line"],
-            lightcolor=p["panel_alt"],
+            lightcolor=p["line"],
             darkcolor=p["line"],
         )
+        style.configure(
+            "Subtle.TFrame",
+            background=p["panel_alt"],
+            relief="solid",
+            borderwidth=1,
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+        )
+        style.configure("TLabel", background=p["bg"], foreground=p["ink"], font=base_font)
+        style.configure("Panel.TLabel", background=p["panel"], foreground=p["ink"], font=base_font)
+        style.configure("Muted.TLabel", background=p["bg"], foreground=p["muted"], font=base_font)
+        style.configure("PanelMuted.TLabel", background=p["panel"], foreground=p["muted"], font=base_font)
+        style.configure("Title.TLabel", background=p["bg"], foreground=p["ink"], font=("Malgun Gothic", 22, "bold"))
+        style.configure("MetricTitle.TLabel", background=p["panel"], foreground=p["muted"], font=("Malgun Gothic", 11))
+        style.configure("MetricValue.TLabel", background=p["panel"], foreground=p["ink"], font=("Malgun Gothic", 24, "bold"))
+        style.configure(
+            "TButton",
+            padding=(16, 9),
+            font=("Malgun Gothic", 11, "bold"),
+            background=p["control_bg"],
+            foreground=p["ink"],
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
+            focusthickness=1,
+            focuscolor=p["line"],
+        )
         style.map(
             "TButton",
             background=[("active", p["track"]), ("disabled", p["panel_alt"])],
@@ -193,27 +224,34 @@ class PatreonMemberApp(tk.Tk):
         )
         style.configure(
             "Accent.TButton",
-            padding=(14, 8),
-            font=("Segoe UI", 10, "bold"),
-            background=p["panel_alt"],
+            padding=(16, 9),
+            font=("Malgun Gothic", 11, "bold"),
+            background=p["control_bg"],
             foreground=p["ink"],
             bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
         )
         style.map(
             "Accent.TButton",
             background=[("active", p["track"]), ("disabled", p["panel_alt"])],
             foreground=[("active", p["ink"]), ("disabled", p["muted"])],
         )
-        style.configure("TCheckbutton", background=p["bg"], foreground=p["ink"])
+        style.configure("TCheckbutton", background=p["bg"], foreground=p["ink"], font=("Malgun Gothic", 10, "bold"))
         style.map("TCheckbutton", background=[("active", p["bg"])], foreground=[("active", p["ink"])])
         style.configure(
             "TEntry",
-            fieldbackground=p["panel"],
+            padding=4,
+            fieldbackground=p["control_bg"],
             foreground=p["ink"],
             insertcolor=p["ink"],
             bordercolor=p["line"],
-            lightcolor=p["panel"],
+            lightcolor=p["line"],
             darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
         )
         style.map(
             "TEntry",
@@ -222,39 +260,84 @@ class PatreonMemberApp(tk.Tk):
         )
         style.configure(
             "TCombobox",
-            fieldbackground=p["panel"],
-            background=p["panel_alt"],
+            padding=3,
+            fieldbackground=p["control_bg"],
+            background=p["control_bg"],
             foreground=p["ink"],
             arrowcolor=p["ink"],
-            selectbackground=p["panel_alt"],
+            selectbackground=p["control_bg"],
             selectforeground=p["ink"],
             bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
         )
         style.map(
             "TCombobox",
-            fieldbackground=[("readonly", p["panel"]), ("disabled", p["panel_alt"])],
+            fieldbackground=[("readonly", p["control_bg"]), ("disabled", p["panel_alt"])],
             foreground=[("readonly", p["ink"]), ("disabled", p["ink"])],
-            selectbackground=[("readonly", p["panel"])],
+            selectbackground=[("readonly", p["control_bg"])],
             selectforeground=[("readonly", p["ink"])],
             arrowcolor=[("readonly", p["ink"]), ("disabled", p["muted"])],
         )
-        style.configure("TNotebook", background=p["bg"], borderwidth=0)
-        style.configure("TNotebook.Tab", background=p["panel_alt"], foreground=p["ink"], padding=(16, 8))
-        style.map("TNotebook.Tab", background=[("selected", p["panel"])], foreground=[("selected", p["ink"])])
+        style.configure(
+            "TNotebook",
+            background=p["bg"],
+            borderwidth=2,
+            bordercolor=p["line"],
+            tabmargins=(0, 8, 0, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=p["panel_alt"],
+            foreground=p["ink"],
+            padding=(20, 9),
+            font=("Malgun Gothic", 10, "bold"),
+            borderwidth=2,
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+        )
+        style.map("TNotebook.Tab", background=[("selected", p["tab_selected"])], foreground=[("selected", p["ink"])])
         style.configure(
             "Treeview",
-            rowheight=30,
-            font=("Segoe UI", 10),
+            rowheight=31,
+            font=("Malgun Gothic", 10),
             background=p["panel"],
             fieldbackground=p["panel"],
             foreground=p["ink"],
             bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
         )
-        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), background=p["panel_alt"], foreground=p["ink"])
+        style.configure(
+            "Treeview.Heading",
+            font=("Malgun Gothic", 10, "bold"),
+            background=p["panel_alt"],
+            foreground=p["ink"],
+            bordercolor=p["line"],
+            lightcolor=p["line"],
+            darkcolor=p["line"],
+            relief="solid",
+            borderwidth=2,
+        )
         style.map("Treeview", background=[("selected", p["select_bg"])], foreground=[("selected", p["select_fg"])])
+        for scrollbar_style in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+            style.configure(
+                scrollbar_style,
+                background=p["panel_alt"],
+                troughcolor=p["panel"],
+                bordercolor=p["line"],
+                arrowcolor=p["ink"],
+                lightcolor=p["line"],
+                darkcolor=p["line"],
+            )
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=18)
+        root = ttk.Frame(self, padding=(18, 22, 18, 14))
         root.pack(fill=tk.BOTH, expand=True)
         self.root_frame = root
 
@@ -272,7 +355,7 @@ class PatreonMemberApp(tk.Tk):
         self.status_var = tk.StringVar(value="기존 결과를 불러오는 중입니다.")
         ttk.Label(right_header, textvariable=self.status_var, style="Muted.TLabel").pack(side=tk.RIGHT)
 
-        controls = ttk.Frame(root, padding=(0, 14, 0, 10))
+        controls = ttk.Frame(root, padding=(0, 18, 0, 12))
         controls.pack(fill=tk.X)
         ttk.Label(controls, text="기간").pack(side=tk.LEFT)
         self.range_box = ttk.Combobox(
@@ -303,10 +386,10 @@ class PatreonMemberApp(tk.Tk):
 
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill=tk.BOTH, expand=True)
-        self.summary_tab = ttk.Frame(self.notebook, padding=12)
-        self.period_tab = ttk.Frame(self.notebook, padding=12)
-        self.table_tab = ttk.Frame(self.notebook, padding=12)
-        self.patreon_tab = ttk.Frame(self.notebook, padding=12)
+        self.summary_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
+        self.period_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
+        self.table_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
+        self.patreon_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
         self.notebook.add(self.summary_tab, text="요약")
         self.notebook.add(self.period_tab, text="기간별")
         self.notebook.add(self.table_tab, text="목록")
@@ -342,7 +425,7 @@ class PatreonMemberApp(tk.Tk):
 
         chart_panel = ttk.Frame(self.summary_tab, style="Panel.TFrame", padding=16)
         chart_panel.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(chart_panel, text="티어 분포", style="Panel.TLabel", font=("Segoe UI", 13, "bold")).pack(anchor=tk.W)
+        ttk.Label(chart_panel, text="티어 분포", style="Panel.TLabel", font=("Malgun Gothic", 13, "bold")).pack(anchor=tk.W)
         self.tier_chart = tk.Canvas(chart_panel, height=360, bg=self.palette["panel"], highlightthickness=0)
         self.tier_chart.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
         self.tier_chart.bind("<Configure>", lambda _event: self._draw_tier_chart(self.visible_rows))
@@ -372,10 +455,10 @@ class PatreonMemberApp(tk.Tk):
                 self.dimension_frame,
                 text=dimension,
                 command=lambda value=dimension: self.select_insight_dimension(value),
-                bd=0,
-                padx=18,
-                pady=10,
-                font=("Segoe UI", 11, "bold"),
+                bd=1,
+                padx=20,
+                pady=12,
+                font=("Malgun Gothic", 11, "bold"),
                 cursor="hand2",
             )
             button.pack(side=tk.LEFT, padx=(0, 8))
@@ -519,13 +602,18 @@ class PatreonMemberApp(tk.Tk):
         p = self.palette
         for dimension, button in self.dimension_buttons.items():
             selected = dimension == self.insight_dimension_var.get()
+            selected_bg = "#3b3b3d" if selected and self.dark_mode_var.get() else p["panel_alt"]
+            normal_bg = p["panel"]
             button.configure(
-                bg="#3b3b3d" if selected and self.dark_mode_var.get() else (p["panel_alt"] if selected else p["panel"]),
+                bg=selected_bg if selected else normal_bg,
                 fg=p["ink"],
-                activebackground=p["panel_alt"],
+                activebackground=selected_bg if selected else p["track"],
                 activeforeground=p["ink"],
-                relief=tk.FLAT,
-                highlightthickness=0,
+                relief=tk.SOLID,
+                borderwidth=1,
+                highlightthickness=1,
+                highlightbackground=p["line"],
+                highlightcolor=p["line"],
             )
 
     def _configure_tree_tags(self) -> None:
@@ -878,11 +966,11 @@ class PatreonMemberApp(tk.Tk):
         for index, (label, count, color) in enumerate(data):
             y = top + index * row_h
             fill_width = int(bar_w * (count / max_count)) if max_count else 0
-            chart.create_text(18, y + 12, text=label, anchor=tk.W, fill=p["ink"], font=("Segoe UI", 10))
+            chart.create_text(18, y + 12, text=label, anchor=tk.W, fill=p["ink"], font=("Malgun Gothic", 10))
             chart.create_rectangle(left, y, left + bar_w, y + 24, fill=p["track"], outline="")
             if count:
                 chart.create_rectangle(left, y, left + max(fill_width, 3), y + 24, fill=color, outline="")
-            chart.create_text(left + bar_w + 14, y + 12, text=str(count), anchor=tk.W, fill=p["muted"], font=("Segoe UI", 10))
+            chart.create_text(left + bar_w + 14, y + 12, text=str(count), anchor=tk.W, fill=p["muted"], font=("Malgun Gothic", 10))
         if not rows:
             chart.create_text(
                 width / 2,
@@ -890,7 +978,7 @@ class PatreonMemberApp(tk.Tk):
                 text="표시할 데이터가 없습니다.",
                 anchor=tk.CENTER,
                 fill=p["muted"],
-                font=("Segoe UI", 10),
+                font=("Malgun Gothic", 10),
             )
 
     def _draw_period_chart(self, rows: list[dict[str, str]]) -> None:
@@ -922,7 +1010,7 @@ class PatreonMemberApp(tk.Tk):
                 text="선택한 기간에 표시할 데이터가 없습니다.",
                 anchor=tk.CENTER,
                 fill=p["muted"],
-                font=("Segoe UI", 10),
+                font=("Malgun Gothic", 10),
             )
         else:
             max_total = max(sum(values.values()) for _label, _date, values in buckets) or 1
@@ -954,7 +1042,7 @@ class PatreonMemberApp(tk.Tk):
                         text=label,
                         anchor=tk.N,
                         fill=p["muted"],
-                        font=("Segoe UI", 9),
+                        font=("Malgun Gothic", 9),
                     )
 
             for ratio in [0, 0.5, 1.0]:
@@ -962,7 +1050,7 @@ class PatreonMemberApp(tk.Tk):
                 value = max_total * ratio
                 label = f"{value:.1f}" if value and value != int(value) else str(int(value))
                 chart.create_line(left - 4, y, left + plot_w, y, fill=p["line"])
-                chart.create_text(left + plot_w + 12, y, text=label, anchor=tk.W, fill=p["muted"], font=("Segoe UI", 9))
+                chart.create_text(left + plot_w + 12, y, text=label, anchor=tk.W, fill=p["muted"], font=("Malgun Gothic", 9))
 
         self._draw_insight_cards(chart, rows, series, left, y_bottom + 76, width - left - right)
 
@@ -989,8 +1077,8 @@ class PatreonMemberApp(tk.Tk):
                 break
             chart.create_rectangle(x, top, x + card_w, top + 88, fill=p["panel_alt"], outline=p["muted"], width=1)
             chart.create_rectangle(x + 14, top + 22, x + 26, top + 34, fill=color, outline=color)
-            chart.create_text(x + 34, top + 28, text=label, anchor=tk.W, fill=p["muted"], font=("Segoe UI", 10))
-            chart.create_text(x + 14, top + 58, text=str(counts.get(key, 0)), anchor=tk.W, fill=p["ink"], font=("Segoe UI", 16, "bold"))
+            chart.create_text(x + 34, top + 28, text=label, anchor=tk.W, fill=p["muted"], font=("Malgun Gothic", 10))
+            chart.create_text(x + 14, top + 58, text=str(counts.get(key, 0)), anchor=tk.W, fill=p["ink"], font=("Malgun Gothic", 16, "bold"))
 
     def _period_buckets(
         self,
