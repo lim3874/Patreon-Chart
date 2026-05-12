@@ -1706,7 +1706,8 @@ class PatreonMemberApp(tk.Tk):
         chart.configure(bg=p["panel"])
         chart.delete("all")
         series = self._insight_series()
-        buckets = self._period_buckets(rows, self.group_var.get(), series)
+        group = self.group_var.get()
+        buckets = self._period_buckets(rows, group, series)
         width = max(chart.winfo_width(), 840)
         height = max(chart.winfo_height(), 500)
         left = 58
@@ -1740,7 +1741,12 @@ class PatreonMemberApp(tk.Tk):
             if len(buckets) <= 8:
                 bar_w = 30 if series_count == 1 else max(8, min(22, 54 / series_count))
                 actual_group_w = bar_w * series_count + series_gap * (series_count - 1)
-                slot_w = max(72, actual_group_w + 46)
+                label_slot_min = 126 if group in {"매월", "Monthly"} else 88
+                natural_slot_w = max(label_slot_min, actual_group_w + 46)
+                if natural_slot_w * len(buckets) > plot_w:
+                    slot_w = max(actual_group_w + 24, plot_w / max(1, len(buckets)))
+                else:
+                    slot_w = natural_slot_w
                 plot_start = left + max(0, (plot_w - slot_w * len(buckets)) / 2)
             else:
                 slot_w = plot_w / max(1, len(buckets))

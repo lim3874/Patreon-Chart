@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.2 - 2026-05-12
+
+### Fixed
+
+- Increase sparse monthly chart label spacing so `YYYY-MM` labels do not overlap.
+
 ## 2.6.1 - 2026-05-12
 
 ### Fixed
