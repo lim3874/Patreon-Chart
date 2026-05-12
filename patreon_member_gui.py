@@ -51,17 +51,17 @@ APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v4.png"
 _WINDOWS_PROCESS_CONFIGURED = False
 
 TABLE_COLUMNS = [
-    ("event_type", "CATEGORY", 130),
-    ("received_at", "RECEIVED DATE", 165),
-    ("member_name", "NAME", 180),
-    ("member_email", "EMAIL", 250),
-    ("membership_tier", "TIER", 135),
-    ("billing_cycle", "CYCLE", 110),
-    ("payment_status", "STATUS", 150),
-    ("conversion_path", "SOURCE", 130),
-    ("original_amount", "AMOUNT", 115),
-    ("usd_estimate", "USD EST.", 100),
-    ("confidence", "CHECK", 100),
+    ("event_type", "구분", 130),
+    ("received_at", "수신일", 165),
+    ("member_name", "이름", 180),
+    ("member_email", "이메일", 250),
+    ("membership_tier", "티어", 135),
+    ("billing_cycle", "청구 주기", 110),
+    ("payment_status", "결제 상태", 150),
+    ("conversion_path", "경로", 130),
+    ("original_amount", "결제 금액", 115),
+    ("usd_estimate", "USD 추정", 100),
+    ("confidence", "확인", 100),
 ]
 
 PATREON_TABLE_COLUMNS = [
@@ -144,8 +144,8 @@ TIER_COLORS = {
 }
 
 RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12개월", "전체", "사용자 지정"]
-GROUP_OPTIONS = ["Daily", "Weekly", "Monthly"]
-INSIGHT_DIMENSIONS = ["All", "Rejoins", "Membership Tier", "Billing Cycle", "Payment Status", "Paid Path"]
+GROUP_OPTIONS = ["매일", "매주", "매월"]
+INSIGHT_DIMENSIONS = ["전체", "재구독", "멤버십 등급", "청구 주기", "결제 상태", "유료 전환 경로"]
 SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
 
 
@@ -154,7 +154,7 @@ class PatreonMemberApp(tk.Tk):
         configure_windows_process()
         super().__init__()
         self._configure_dpi_scaling()
-        self.title("Patreon Gmail Member Exporter")
+        self.title("Patreon 가입자 대시보드")
         self._icon_image: tk.PhotoImage | None = None
         self._apply_window_icon()
         self.geometry("1280x820")
@@ -174,29 +174,32 @@ class PatreonMemberApp(tk.Tk):
         if self.range_var.get() not in RANGE_PRESETS:
             self.range_var.set("지난 30일")
         self.group_var = tk.StringVar(value=str(self.app_settings.get("group_unit", "매일")))
-        if self.group_var.get() == "매일":
-            self.group_var.set("Daily")
-        elif self.group_var.get() == "매주":
-            self.group_var.set("Weekly")
-        elif self.group_var.get() == "매월":
-            self.group_var.set("Monthly")
+        legacy_groups = {
+            "Daily": "매일",
+            "Weekly": "매주",
+            "Monthly": "매월",
+        }
+        if self.group_var.get() in legacy_groups:
+            self.group_var.set(legacy_groups[self.group_var.get()])
         if self.group_var.get() not in GROUP_OPTIONS:
-            self.group_var.set("Daily")
+            self.group_var.set("매일")
         self.insight_dimension_var = tk.StringVar(value=str(self.app_settings.get("insight_dimension", "결제 상태")))
         legacy_dimensions = {
-            "전체": "All",
-            "멤버십 등급": "Membership Tier",
-            "청구 주기": "Billing Cycle",
-            "결제 상태": "Payment Status",
-            "유료로 전환하는 경로": "Paid Path",
+            "All": "전체",
+            "Rejoins": "재구독",
+            "Membership Tier": "멤버십 등급",
+            "Billing Cycle": "청구 주기",
+            "Payment Status": "결제 상태",
+            "Paid Path": "유료 전환 경로",
+            "유료로 전환하는 경로": "유료 전환 경로",
         }
         if self.insight_dimension_var.get() in legacy_dimensions:
             self.insight_dimension_var.set(legacy_dimensions[self.insight_dimension_var.get()])
         if self.insight_dimension_var.get() not in INSIGHT_DIMENSIONS:
-            self.insight_dimension_var.set("Payment Status")
+            self.insight_dimension_var.set("결제 상태")
         self.search_var = tk.StringVar(value="")
-        self.status_filter_var = tk.StringVar(value="Status: All")
-        self.tier_filter_var = tk.StringVar(value="All Tiers")
+        self.status_filter_var = tk.StringVar(value="상태: 전체")
+        self.tier_filter_var = tk.StringVar(value="전체 티어")
         self.after_var = tk.StringVar(value="")
         self.before_var = tk.StringVar(value="")
         self.current_start_date: dt.date | None = None
@@ -455,7 +458,7 @@ class PatreonMemberApp(tk.Tk):
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
         tk.Label(
             title_box,
-            text="Creator\nAnalytics",
+            text="크리에이터\n분석",
             bg=p["sidebar"],
             fg=p["primary_soft"],
             justify=tk.LEFT,
@@ -463,7 +466,7 @@ class PatreonMemberApp(tk.Tk):
         ).pack(anchor=tk.W)
         tk.Label(
             title_box,
-            text="Premium Tier",
+            text="멤버십 현황",
             bg=p["sidebar"],
             fg=p["muted"],
             font=("Segoe UI", 10),
@@ -473,9 +476,9 @@ class PatreonMemberApp(tk.Tk):
         nav = tk.Frame(self.sidebar, bg=p["sidebar"])
         nav.pack(fill=tk.X, padx=16)
         for key, icon, label in [
-            ("summary", "[]", "Summary"),
-            ("period", "##", "Period"),
-            ("list", "==", "List"),
+            ("summary", "[]", "요약"),
+            ("period", "##", "기간별"),
+            ("list", "==", "목록"),
             ("patreon", "<>", "Patreon API"),
         ]:
             self.nav_buttons[key] = self._nav_button(nav, key, icon, label)
@@ -485,7 +488,7 @@ class PatreonMemberApp(tk.Tk):
         tk.Frame(bottom, bg=p["line"], height=1).pack(fill=tk.X, pady=(0, 24))
         tk.Button(
             bottom,
-            text="Results Folder  ->",
+            text="결과 폴더  ->",
             command=self.open_output_folder,
             bd=0,
             bg=p["primary_soft"],
@@ -539,7 +542,7 @@ class PatreonMemberApp(tk.Tk):
 
         title = tk.Label(
             bar,
-            text="Analytics Engine",
+            text="가입자 분석 대시보드",
             bg=p["topbar"],
             fg=p["ink"],
             font=("Segoe UI", 20, "bold"),
@@ -548,9 +551,9 @@ class PatreonMemberApp(tk.Tk):
 
         actions = tk.Frame(bar, bg=p["topbar"])
         actions.pack(side=tk.RIGHT, padx=24)
-        self.date_button = self._pill_button(actions, "▣  Date Range", self._open_date_range_dialog, primary=False)
+        self.date_button = self._pill_button(actions, "▣  기간 설정", self._open_date_range_dialog, primary=False)
         self.date_button.pack(side=tk.LEFT, padx=(0, 12))
-        self.refresh_button = self._pill_button(actions, "▭  Import from Gmail", self.refresh_from_gmail, primary=True)
+        self.refresh_button = self._pill_button(actions, "▭  Gmail에서 불러오기", self.refresh_from_gmail, primary=True)
         self.refresh_button.pack(side=tk.LEFT, padx=(0, 22))
         tk.Frame(actions, bg=p["line"], width=1, height=42).pack(side=tk.LEFT, padx=(0, 18))
         self._icon_button(actions, "⚙", self.open_config).pack(side=tk.LEFT, padx=7)
@@ -645,12 +648,12 @@ class PatreonMemberApp(tk.Tk):
         self.summary_tab.rowconfigure(2, weight=1)
         for index, (label, key, detail, color_key) in enumerate(
             [
-                ("TOTAL MEMBERS", "total", "↑12%", "success"),
-                ("REJOINED", "rejoin", "Repeat pledge", "success"),
-                ("TIER 2", "tier2", "↑5%", "accent"),
-                ("TIER 1", "tier1", "Members", "accent_2"),
-                ("TIER 3", "tier3", "Member", "accent_4"),
-                ("NEEDS CHECK", "review", "Action Req.", "review"),
+                ("전체 회원", "total", "선택 기간", "success"),
+                ("재구독", "rejoin", "반복 가입", "success"),
+                ("티어 2", "tier2", "회원", "accent"),
+                ("티어 1", "tier1", "회원", "accent_2"),
+                ("티어 3", "tier3", "회원", "accent_4"),
+                ("확인 필요", "review", "조치 필요", "review"),
             ]
         ):
             card = self._metric_card(self.summary_tab, label, self.metric_vars[key], detail, color_key)
@@ -662,7 +665,7 @@ class PatreonMemberApp(tk.Tk):
         chart_panel.columnconfigure(0, weight=1)
         tk.Label(
             chart_panel,
-            text="Tier Distribution",
+            text="티어 분포",
             bg=self.palette["panel"],
             fg=self.palette["ink"],
             font=("Segoe UI", 16, "bold"),
@@ -681,7 +684,7 @@ class PatreonMemberApp(tk.Tk):
 
         header = tk.Frame(panel, bg=self.palette["panel"])
         header.grid(row=0, column=0, sticky="ew", padx=24, pady=(22, 8))
-        tk.Label(header, text="Member Activity", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
+        tk.Label(header, text="회원 활동", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
         group = tk.Frame(header, bg=self.palette["panel_alt"])
         group.pack(side=tk.RIGHT)
         self.group_buttons: dict[str, tk.Button] = {}
@@ -736,7 +739,7 @@ class PatreonMemberApp(tk.Tk):
         tier_box = ttk.Combobox(
             inner,
             textvariable=self.tier_filter_var,
-            values=["All Tiers", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Needs Check"],
+            values=["전체 티어", "티어 1", "티어 2", "티어 3", "티어 4", "확인 필요"],
             width=14,
             state="readonly",
         )
@@ -745,7 +748,7 @@ class PatreonMemberApp(tk.Tk):
         status_box = ttk.Combobox(
             inner,
             textvariable=self.status_filter_var,
-            values=["Status: All", "Rejoined", "Active Paid", "Payment Completed", "Gift (Other)", "Gift (Self)", "Needs Check"],
+            values=["상태: 전체", "재구독", "유료 활성", "결제 완료", "선물 (타인)", "선물 (본인)", "확인 필요"],
             width=16,
             state="readonly",
         )
@@ -796,7 +799,7 @@ class PatreonMemberApp(tk.Tk):
         toolbar.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 18))
         tk.Button(
             toolbar,
-            text="Patreon Key Settings",
+            text="Patreon 키 설정",
             command=self.open_patreon_settings,
             bd=0,
             bg=self.palette["panel_alt"],
@@ -808,7 +811,7 @@ class PatreonMemberApp(tk.Tk):
         ).pack(side=tk.LEFT, padx=(0, 12))
         self.patreon_refresh_button = tk.Button(
             toolbar,
-            text="Import Current Members",
+            text="현재 멤버 불러오기",
             command=self.refresh_from_patreon,
             bd=0,
             bg=self.palette["primary_soft"],
@@ -821,7 +824,7 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_refresh_button.pack(side=tk.LEFT, padx=(0, 12))
         tk.Button(
             toolbar,
-            text="Open Patreon CSV",
+            text="Patreon CSV 열기",
             command=self.open_patreon_csv,
             bd=0,
             bg=self.palette["panel_alt"],
@@ -840,10 +843,10 @@ class PatreonMemberApp(tk.Tk):
         ).pack(side=tk.RIGHT)
 
         for index, (label, key) in enumerate([
-            ("TOTAL MEMBERS", "total"),
-            ("ACTIVE", "active"),
-            ("DECLINED", "declined"),
-            ("FORMER", "former"),
+            ("전체 회원", "total"),
+            ("활성", "active"),
+            ("결제 실패", "declined"),
+            ("이전 회원", "former"),
         ]):
             card = self._metric_card(self.patreon_tab, label, self.patreon_metric_vars[key], "", "accent")
             card.grid(row=1, column=index, sticky="nsew", padx=(0, 12 if index < 3 else 0), pady=(0, 18))
@@ -988,25 +991,25 @@ class PatreonMemberApp(tk.Tk):
 
     def _open_date_range_dialog(self) -> None:
         dialog = tk.Toplevel(self)
-        dialog.title("Date Range")
+        dialog.title("기간 설정")
         dialog.geometry("420x300")
         dialog.transient(self)
         dialog.grab_set()
         dialog.configure(bg=self.palette["content"])
         frame = tk.Frame(dialog, bg=self.palette["panel"], highlightbackground=self.palette["line"], highlightthickness=1)
         frame.pack(fill=tk.BOTH, expand=True, padx=18, pady=18)
-        tk.Label(frame, text="Date Range", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=22, pady=(20, 14))
+        tk.Label(frame, text="기간 설정", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=22, pady=(20, 14))
 
         form = tk.Frame(frame, bg=self.palette["panel"])
         form.pack(fill=tk.X, padx=22)
-        tk.Label(form, text="Preset", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=6)
+        tk.Label(form, text="기간", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=6)
         range_box = ttk.Combobox(form, textvariable=self.range_var, values=RANGE_PRESETS, width=24, state="readonly")
         range_box.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=6)
         range_box.bind("<<ComboboxSelected>>", lambda _event: self.on_range_changed())
-        tk.Label(form, text="Start", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
+        tk.Label(form, text="시작일", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
         self.after_entry = ttk.Entry(form, textvariable=self.after_var, width=26)
         self.after_entry.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=6)
-        tk.Label(form, text="End", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w", pady=6)
+        tk.Label(form, text="종료일", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w", pady=6)
         self.before_entry = ttk.Entry(form, textvariable=self.before_var, width=26)
         self.before_entry.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=6)
         form.columnconfigure(1, weight=1)
@@ -1016,7 +1019,7 @@ class PatreonMemberApp(tk.Tk):
         buttons.pack(fill=tk.X, padx=22, pady=(20, 0))
         tk.Button(
             buttons,
-            text="Apply",
+            text="적용",
             command=lambda: (self.apply_filters(), dialog.destroy()),
             bd=0,
             bg=self.palette["primary_soft"],
@@ -1028,7 +1031,7 @@ class PatreonMemberApp(tk.Tk):
         ).pack(side=tk.RIGHT)
         tk.Button(
             buttons,
-            text="Cancel",
+            text="취소",
             command=dialog.destroy,
             bd=0,
             bg=self.palette["panel_alt"],
@@ -1119,7 +1122,7 @@ class PatreonMemberApp(tk.Tk):
         if not PATREON_CREDENTIALS_PATH.exists():
             messagebox.showwarning(
                 "Patreon 키 설정 필요",
-                "먼저 Patreon 키 설정을 열고 Client ID, Client Secret, Access Token, Refresh Token을 저장하세요.",
+                "먼저 Patreon 키 설정을 열고 클라이언트 ID, 클라이언트 암호, 액세스 토큰, 새로고침 토큰을 저장하세요.",
             )
             self.open_patreon_settings()
             return
@@ -1283,7 +1286,7 @@ class PatreonMemberApp(tk.Tk):
                 values=[self._table_value(row, column) for column, _, _ in TABLE_COLUMNS],
                 tags=tuple(tags),
             )
-        self.count_var.set(f"{len(rows)} rows")
+        self.count_var.set(f"{len(rows)}명")
 
     def _set_patreon_rows(self, rows: list[dict[str, str]]) -> None:
         for item in self.patreon_tree.get_children():
@@ -1297,7 +1300,7 @@ class PatreonMemberApp(tk.Tk):
             self.patreon_tree.insert(
                 "",
                 tk.END,
-                values=[row.get(column, "") for column, _, _ in PATREON_TABLE_COLUMNS],
+                values=[self._patreon_table_value(row, column) for column, _, _ in PATREON_TABLE_COLUMNS],
                 tags=tuple(tags),
             )
         counts = self._patreon_status_counts(rows)
@@ -1305,6 +1308,29 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_metric_vars["active"].set(str(counts["active_patron"]))
         self.patreon_metric_vars["declined"].set(str(counts["declined_patron"]))
         self.patreon_metric_vars["former"].set(str(counts["former_patron"]))
+
+    def _patreon_table_value(self, row: dict[str, str], column: str) -> str:
+        value = row.get(column, "")
+        if column == "patron_status":
+            return {
+                "active_patron": "활성",
+                "declined_patron": "결제 실패",
+                "former_patron": "이전 회원",
+            }.get(value, value)
+        if column == "tier_title":
+            if value == "Free":
+                return "무료"
+            if value.startswith("Tier "):
+                return value.replace("Tier ", "티어 ")
+            return value
+        if column == "last_charge_status":
+            return {
+                "Paid": "결제 완료",
+                "Declined": "결제 실패",
+                "Pending": "대기 중",
+                "Refunded": "환불",
+            }.get(value, value)
+        return value
 
     def _patreon_status_counts(self, rows: list[dict[str, str]]) -> dict[str, int]:
         counts = {"active_patron": 0, "declined_patron": 0, "former_patron": 0}
@@ -1327,14 +1353,14 @@ class PatreonMemberApp(tk.Tk):
 
         ttk.Label(
             frame,
-            text="Client Secret, Access Token, Refresh Token은 비밀번호처럼 보관됩니다.",
+            text="클라이언트 암호, 액세스 토큰, 새로고침 토큰은 비밀번호처럼 보관됩니다.",
             style="Muted.TLabel",
         ).pack(anchor=tk.W, pady=(0, 12))
         fields = [
-            ("Client ID", "client_id", credentials.client_id, False),
-            ("Client Secret", "client_secret", credentials.client_secret, True),
-            ("Access Token", "access_token", credentials.access_token, True),
-            ("Refresh Token", "refresh_token", credentials.refresh_token, True),
+            ("클라이언트 ID", "client_id", credentials.client_id, False),
+            ("클라이언트 암호", "client_secret", credentials.client_secret, True),
+            ("액세스 토큰", "access_token", credentials.access_token, True),
+            ("새로고침 토큰", "refresh_token", credentials.refresh_token, True),
         ]
         variables: dict[str, tk.StringVar] = {}
         for label, key, value, secret in fields:
@@ -1377,25 +1403,31 @@ class PatreonMemberApp(tk.Tk):
                 or search in row.get("subject", "").lower()
             ]
         selected = self.tier_filter_var.get()
-        if selected not in {"전체", "All Tiers"}:
-            if selected in {"확인필요", "Needs Check"}:
+        if selected not in {"전체", "전체 티어", "All Tiers"}:
+            if selected in {"확인필요", "확인 필요", "Needs Check"}:
                 rows = [row for row in rows if not row.get("tier")]
             else:
                 tier = selected.replace("티어 ", "").replace("Tier ", "")
                 rows = [row for row in rows if row.get("tier") == tier]
-        status = self.status_filter_var.get() if hasattr(self, "status_filter_var") else "Status: All"
-        if status not in {"Status: All", "전체"}:
-            if status == "Rejoined":
+        status = self.status_filter_var.get() if hasattr(self, "status_filter_var") else "상태: 전체"
+        if status not in {"Status: All", "상태: 전체", "전체"}:
+            if status in {"재구독", "Rejoined"}:
                 rows = [row for row in rows if self._is_rejoin_row(row)]
-            elif status == "Needs Check":
+            elif status in {"확인 필요", "Needs Check"}:
                 rows = [row for row in rows if not row.get("tier") or row.get("confidence") == "needs_review"]
             else:
+                status = {
+                    "Active Paid": "유료 활성",
+                    "Payment Completed": "결제 완료",
+                    "Gift (Other)": "선물 (타인)",
+                    "Gift (Self)": "선물 (본인)",
+                }.get(status, status)
                 rows = [row for row in rows if self._payment_status_label(row) == status]
         return rows
 
     def _table_value(self, row: dict[str, str], column: str) -> str:
         if column == "event_type":
-            return "Rejoin" if self._is_rejoin_row(row) else "New Pledge"
+            return "재구독" if self._is_rejoin_row(row) else "신규 가입"
         if column == "membership_tier":
             return self._membership_tier_label(row)
         if column == "billing_cycle":
@@ -1409,30 +1441,30 @@ class PatreonMemberApp(tk.Tk):
     def _membership_tier_label(self, row: dict[str, str]) -> str:
         tier = row.get("tier", "")
         if tier in {"1", "2", "3", "4"}:
-            return f"Tier {tier}"
-        return "Needs Check"
+            return f"티어 {tier}"
+        return "확인 필요"
 
     def _billing_cycle_label(self, row: dict[str, str]) -> str:
         subject = row.get("subject", "").lower()
         if "annual" in subject or "yearly" in subject or "연간" in subject:
-            return "Annual"
-        return "Monthly"
+            return "연간"
+        return "월간"
 
     def _payment_status_label(self, row: dict[str, str]) -> str:
         text = f"{row.get('subject', '')} {row.get('match_method', '')} {row.get('confidence', '')}".lower()
         if "gift" in text or "선물" in text:
             if "self" in text or "본인" in text:
-                return "Gift (Self)"
-            return "Gift (Other)"
+                return "선물 (본인)"
+            return "선물 (타인)"
         if row.get("confidence") == "needs_review":
-            return "Payment Completed"
-        return "Active Paid"
+            return "결제 완료"
+        return "유료 활성"
 
     def _conversion_path_label(self, row: dict[str, str]) -> str:
         sender = row.get("from", "").lower()
         if "patreon" in sender:
             return "Gmail"
-        return "Other"
+        return "기타"
 
     def _draw_tier_chart(self, rows: list[dict[str, str]]) -> None:
         chart = self.tier_chart
@@ -1441,10 +1473,10 @@ class PatreonMemberApp(tk.Tk):
         chart.delete("all")
         counts = self._tier_counts(rows)
         data = [
-            ("Tier 1", counts["1"], p[TIER_COLORS["1"]]),
-            ("Tier 2", counts["2"], p[TIER_COLORS["2"]]),
-            ("Tier 3", counts["3"], p[TIER_COLORS["3"]]),
-            ("Tier 4", counts["4"], p[TIER_COLORS["4"]]),
+            ("티어 1", counts["1"], p[TIER_COLORS["1"]]),
+            ("티어 2", counts["2"], p[TIER_COLORS["2"]]),
+            ("티어 3", counts["3"], p[TIER_COLORS["3"]]),
+            ("티어 4", counts["4"], p[TIER_COLORS["4"]]),
         ]
         data.sort(key=lambda item: item[1], reverse=True)
         width = max(chart.winfo_width(), 420)
@@ -1602,56 +1634,56 @@ class PatreonMemberApp(tk.Tk):
 
     def _insight_series(self) -> list[tuple[str, str, str]]:
         dimension = self.insight_dimension_var.get()
-        if dimension == "Rejoins":
+        if dimension in {"재구독", "Rejoins"}:
             return [
-                ("first_pledge", "First Pledge", SERIES_COLORS[0]),
-                ("rejoin", "Rejoined", SERIES_COLORS[1]),
+                ("first_pledge", "첫 가입", SERIES_COLORS[0]),
+                ("rejoin", "재구독", SERIES_COLORS[1]),
             ]
         if dimension in {"멤버십 등급", "Membership Tier"}:
             return [
-                ("tier_1", "Tier 1", SERIES_COLORS[1]),
-                ("tier_2", "Tier 2", SERIES_COLORS[0]),
-                ("tier_3", "Tier 3", SERIES_COLORS[2]),
-                ("tier_4", "Tier 4", SERIES_COLORS[3]),
-                ("tier_review", "Needs Check", SERIES_COLORS[4]),
+                ("tier_1", "티어 1", SERIES_COLORS[1]),
+                ("tier_2", "티어 2", SERIES_COLORS[0]),
+                ("tier_3", "티어 3", SERIES_COLORS[2]),
+                ("tier_4", "티어 4", SERIES_COLORS[3]),
+                ("tier_review", "확인 필요", SERIES_COLORS[4]),
             ]
         if dimension in {"청구 주기", "Billing Cycle"}:
             return [
-                ("monthly", "Monthly", SERIES_COLORS[0]),
-                ("annual", "Annual", SERIES_COLORS[1]),
+                ("monthly", "월간", SERIES_COLORS[0]),
+                ("annual", "연간", SERIES_COLORS[1]),
             ]
         if dimension in {"결제 상태", "Payment Status"}:
             return [
-                ("paid_active", "Active Paid", SERIES_COLORS[0]),
-                ("retry_complete", "Payment Completed", SERIES_COLORS[1]),
-                ("gift_other", "Gift (Other)", SERIES_COLORS[2]),
-                ("gift_self", "Gift (Self)", SERIES_COLORS[3]),
+                ("paid_active", "유료 활성", SERIES_COLORS[0]),
+                ("retry_complete", "결제 완료", SERIES_COLORS[1]),
+                ("gift_other", "선물 (타인)", SERIES_COLORS[2]),
+                ("gift_self", "선물 (본인)", SERIES_COLORS[3]),
             ]
-        if dimension in {"유료로 전환하는 경로", "Paid Path"}:
+        if dimension in {"유료 전환 경로", "유료로 전환하는 경로", "Paid Path"}:
             return [
                 ("email", "Gmail", SERIES_COLORS[0]),
-                ("other_path", "Other", SERIES_COLORS[1]),
+                ("other_path", "기타", SERIES_COLORS[1]),
             ]
-        return [("new_member", "New Members", SERIES_COLORS[0])]
+        return [("new_member", "신규 회원", SERIES_COLORS[0])]
 
     def _series_key_for_row(self, row: dict[str, str], dimension: str) -> str:
-        if dimension == "Rejoins":
+        if dimension in {"재구독", "Rejoins"}:
             return "rejoin" if self._is_rejoin_row(row) else "first_pledge"
         if dimension in {"멤버십 등급", "Membership Tier"}:
             tier = row.get("tier", "")
             return f"tier_{tier}" if tier in {"1", "2", "3", "4"} else "tier_review"
         if dimension in {"청구 주기", "Billing Cycle"}:
-            return "annual" if self._billing_cycle_label(row) == "Annual" else "monthly"
+            return "annual" if self._billing_cycle_label(row) in {"연간", "Annual"} else "monthly"
         if dimension in {"결제 상태", "Payment Status"}:
             status = self._payment_status_label(row)
-            if status == "Payment Completed":
+            if status in {"결제 완료", "Payment Completed"}:
                 return "retry_complete"
-            if status == "Gift (Other)":
+            if status in {"선물 (타인)", "Gift (Other)"}:
                 return "gift_other"
-            if status == "Gift (Self)":
+            if status in {"선물 (본인)", "Gift (Self)"}:
                 return "gift_self"
             return "paid_active"
-        if dimension in {"유료로 전환하는 경로", "Paid Path"}:
+        if dimension in {"유료 전환 경로", "유료로 전환하는 경로", "Paid Path"}:
             return "email" if self._conversion_path_label(row) == "Gmail" else "other_path"
         return "new_member"
 
@@ -1904,7 +1936,7 @@ if __name__ == "__main__":
         (OUTPUT_DIR / "gui_error.log").write_text(error_text, encoding="utf-8")
         try:
             messagebox.showerror(
-                "Patreon Gmail Member Exporter",
+                "Patreon 가입자 대시보드",
                 "프로그램을 시작하지 못했습니다.\n\noutput\\gui_error.log를 확인하세요.",
             )
         except tk.TclError:

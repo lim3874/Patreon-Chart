@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.0 - 2026-05-12
+
+### Added
+
+- Localize the desktop dashboard UI into Korean.
+- Add Korean labels for the sidebar, top action bar, summary cards, period chart controls, filters, date range dialog, and Patreon API workspace.
+- Display Gmail member table values in Korean, including 신규 가입, 재구독, 티어, 청구 주기, 결제 상태, and 확인 필요.
+- Display Patreon API member table statuses and common tier/payment values in Korean.
+
+### Changed
+
+- Keep legacy English setting values compatible while saving and showing the Korean UI labels going forward.
+
 ## 2.1.2 - 2026-05-12
 
 ### Fixed
