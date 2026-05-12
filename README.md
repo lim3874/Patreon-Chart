@@ -54,9 +54,12 @@ Copy-Item config.example.json config.json
 - Creator Analytics 스타일의 어두운 카드형 대시보드에서 데이터 확인
 - 차트 모양의 전용 앱 아이콘으로 바탕화면/작업표시줄에서 구분
 - `Summary`에서 티어별 현황과 분포 확인
+- `Summary`의 `REJOINED` 카드에서 선택 기간 안의 재구독 의심 이벤트 확인
 - `Period`에서 전체, 멤버십 등급, 청구 주기, 결제 상태, 유료 전환 경로 기준의 막대 그래프 확인
+- `Period`의 `Rejoins` 차트에서 첫 가입과 재구독 의심 이벤트를 기간별로 비교
 - `Period`에서 Daily/Weekly/Monthly 집계 전환
 - `List`에서 이름/이메일 검색, 티어 필터, 상태 필터가 포함된 표 확인
+- `List`의 `Status: Rejoined` 필터로 취소 후 재구독했을 가능성이 있는 회원만 확인
 - `Patreon API`에서 Patreon의 현재 멤버 상태/티어/결제 상태 가져오기
 - `Import from Gmail`로 메일 재조회
 

@@ -144,7 +144,7 @@ TIER_COLORS = {
 
 RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12개월", "전체", "사용자 지정"]
 GROUP_OPTIONS = ["Daily", "Weekly", "Monthly"]
-INSIGHT_DIMENSIONS = ["All", "Membership Tier", "Billing Cycle", "Payment Status", "Paid Path"]
+INSIGHT_DIMENSIONS = ["All", "Rejoins", "Membership Tier", "Billing Cycle", "Payment Status", "Paid Path"]
 SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
 
 
@@ -160,6 +160,7 @@ class PatreonMemberApp(tk.Tk):
         self.rows: list[dict[str, str]] = []
         self.visible_rows: list[dict[str, str]] = []
         self.patreon_rows: list[dict[str, str]] = []
+        self.rejoin_row_keys: set[tuple[str, str, str, str]] = set()
         self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.is_running = False
 
@@ -387,6 +388,7 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_status_var = tk.StringVar(value="Patreon API 설정 후 현재 멤버를 불러올 수 있습니다.")
         self.metric_vars = {
             "total": tk.StringVar(value="0"),
+            "rejoin": tk.StringVar(value="0"),
             "tier1": tk.StringVar(value="0"),
             "tier2": tk.StringVar(value="0"),
             "tier3": tk.StringVar(value="0"),
@@ -620,10 +622,10 @@ class PatreonMemberApp(tk.Tk):
         for index, (label, key, detail, color_key) in enumerate(
             [
                 ("TOTAL MEMBERS", "total", "↑12%", "success"),
-                ("TIER 1", "tier1", "Members", "accent_2"),
+                ("REJOINED", "rejoin", "Repeat pledge", "success"),
                 ("TIER 2", "tier2", "↑5%", "accent"),
+                ("TIER 1", "tier1", "Members", "accent_2"),
                 ("TIER 3", "tier3", "Member", "accent_4"),
-                ("TIER 4", "tier4", "Members", "review"),
                 ("NEEDS CHECK", "review", "Action Req.", "review"),
             ]
         ):
@@ -655,7 +657,7 @@ class PatreonMemberApp(tk.Tk):
 
         header = tk.Frame(panel, bg=self.palette["panel"])
         header.grid(row=0, column=0, sticky="ew", padx=24, pady=(22, 8))
-        tk.Label(header, text="New Members", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
+        tk.Label(header, text="Member Activity", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
         group = tk.Frame(header, bg=self.palette["panel_alt"])
         group.pack(side=tk.RIGHT)
         self.group_buttons: dict[str, tk.Button] = {}
@@ -719,7 +721,7 @@ class PatreonMemberApp(tk.Tk):
         status_box = ttk.Combobox(
             inner,
             textvariable=self.status_filter_var,
-            values=["Status: All", "Active Paid", "Payment Completed", "Gift (Other)", "Gift (Self)", "Needs Check"],
+            values=["Status: All", "Rejoined", "Active Paid", "Payment Completed", "Gift (Other)", "Gift (Self)", "Needs Check"],
             width=16,
             state="readonly",
         )
@@ -1016,6 +1018,7 @@ class PatreonMemberApp(tk.Tk):
     def _configure_tree_tags(self) -> None:
         if hasattr(self, "tree"):
             self.tree.tag_configure("needs_review", background=self.palette["table_review"], foreground=self.palette["ink"])
+            self.tree.tag_configure("rejoin", background="#14283a", foreground=self.palette["ink"])
             self.tree.tag_configure("alt", background=self.palette["row_alt"], foreground=self.palette["ink"])
         if hasattr(self, "patreon_tree"):
             self.patreon_tree.tag_configure("declined", background=self.palette["table_review"], foreground=self.palette["ink"])
@@ -1057,6 +1060,7 @@ class PatreonMemberApp(tk.Tk):
         if start == "invalid" or end == "invalid":
             messagebox.showwarning("날짜 형식", "날짜는 YYYY/MM/DD 또는 YYYY-MM-DD 형식으로 입력하세요.")
             return
+        self._set_rejoin_cache(self.rows)
         self.current_start_date = start if isinstance(start, dt.date) else None
         self.current_end_date = end if isinstance(end, dt.date) else None
         self.visible_rows = [row for row in self.rows if self._row_in_period(row, start, end)]
@@ -1196,11 +1200,46 @@ class PatreonMemberApp(tk.Tk):
     def _update_metrics(self, rows: list[dict[str, str]]) -> None:
         counts = self._tier_counts(rows)
         self.metric_vars["total"].set(str(len(rows)))
+        self.metric_vars["rejoin"].set(str(sum(1 for row in rows if self._is_rejoin_row(row))))
         self.metric_vars["tier1"].set(str(counts["1"]))
         self.metric_vars["tier2"].set(str(counts["2"]))
         self.metric_vars["tier3"].set(str(counts["3"]))
         self.metric_vars["tier4"].set(str(counts["4"]))
         self.metric_vars["review"].set(str(counts["needs_review"]))
+
+    def _set_rejoin_cache(self, rows: list[dict[str, str]]) -> None:
+        entries: list[tuple[dt.datetime, str, dict[str, str]]] = []
+        for row in rows:
+            identity = self._member_identity(row)
+            if not identity:
+                continue
+            entries.append((self._row_datetime(row) or dt.datetime.min, identity, row))
+        seen: set[str] = set()
+        rejoin_keys: set[tuple[str, str, str, str]] = set()
+        for _received_at, identity, row in sorted(entries, key=lambda item: item[0]):
+            if identity in seen:
+                rejoin_keys.add(self._row_identity_key(row))
+            else:
+                seen.add(identity)
+        self.rejoin_row_keys = rejoin_keys
+
+    def _member_identity(self, row: dict[str, str]) -> str:
+        email = row.get("member_email", "").strip().lower()
+        if email:
+            return f"email:{email}"
+        name = row.get("member_name", "").strip().lower()
+        return f"name:{name}" if name else ""
+
+    def _row_identity_key(self, row: dict[str, str]) -> tuple[str, str, str, str]:
+        return (
+            self._member_identity(row),
+            row.get("received_at", ""),
+            row.get("member_email", "").strip().lower(),
+            row.get("member_name", "").strip().lower(),
+        )
+
+    def _is_rejoin_row(self, row: dict[str, str]) -> bool:
+        return self._row_identity_key(row) in self.rejoin_row_keys
 
     def _refresh_table(self) -> None:
         rows = self._filtered_table_rows()
@@ -1210,6 +1249,8 @@ class PatreonMemberApp(tk.Tk):
             tags = []
             if index % 2:
                 tags.append("alt")
+            if self._is_rejoin_row(row):
+                tags.append("rejoin")
             if not row.get("tier") or row.get("confidence") == "needs_review":
                 tags.append("needs_review")
             self.tree.insert(
@@ -1320,7 +1361,9 @@ class PatreonMemberApp(tk.Tk):
                 rows = [row for row in rows if row.get("tier") == tier]
         status = self.status_filter_var.get() if hasattr(self, "status_filter_var") else "Status: All"
         if status not in {"Status: All", "전체"}:
-            if status == "Needs Check":
+            if status == "Rejoined":
+                rows = [row for row in rows if self._is_rejoin_row(row)]
+            elif status == "Needs Check":
                 rows = [row for row in rows if not row.get("tier") or row.get("confidence") == "needs_review"]
             else:
                 rows = [row for row in rows if self._payment_status_label(row) == status]
@@ -1328,7 +1371,7 @@ class PatreonMemberApp(tk.Tk):
 
     def _table_value(self, row: dict[str, str], column: str) -> str:
         if column == "event_type":
-            return "New Pledge"
+            return "Rejoin" if self._is_rejoin_row(row) else "New Pledge"
         if column == "membership_tier":
             return self._membership_tier_label(row)
         if column == "billing_cycle":
@@ -1535,6 +1578,11 @@ class PatreonMemberApp(tk.Tk):
 
     def _insight_series(self) -> list[tuple[str, str, str]]:
         dimension = self.insight_dimension_var.get()
+        if dimension == "Rejoins":
+            return [
+                ("first_pledge", "First Pledge", SERIES_COLORS[0]),
+                ("rejoin", "Rejoined", SERIES_COLORS[1]),
+            ]
         if dimension in {"멤버십 등급", "Membership Tier"}:
             return [
                 ("tier_1", "Tier 1", SERIES_COLORS[1]),
@@ -1563,6 +1611,8 @@ class PatreonMemberApp(tk.Tk):
         return [("new_member", "New Members", SERIES_COLORS[0])]
 
     def _series_key_for_row(self, row: dict[str, str], dimension: str) -> str:
+        if dimension == "Rejoins":
+            return "rejoin" if self._is_rejoin_row(row) else "first_pledge"
         if dimension in {"멤버십 등급", "Membership Tier"}:
             tier = row.get("tier", "")
             return f"tier_{tier}" if tier in {"1", "2", "3", "4"} else "tier_review"
@@ -1646,13 +1696,20 @@ class PatreonMemberApp(tk.Tk):
         return True
 
     def _row_date(self, row: dict[str, str]) -> dt.date | None:
+        row_datetime = self._row_datetime(row)
+        return row_datetime.date() if row_datetime else None
+
+    def _row_datetime(self, row: dict[str, str]) -> dt.datetime | None:
         value = row.get("received_at", "")
         if not value:
             return None
         try:
-            return dt.datetime.fromisoformat(value).date()
+            parsed = dt.datetime.fromisoformat(value)
         except ValueError:
             return None
+        if parsed.tzinfo is not None:
+            return parsed.astimezone().replace(tzinfo=None)
+        return parsed
 
     def _parse_date_text(self, value: str) -> dt.date | None | str:
         if not value:

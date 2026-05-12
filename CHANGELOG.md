@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.0 - 2026-05-12
+
+### Added
+
+- Add rejoin detection for members who appear in Patreon new-member mail more than once.
+- Add a `REJOINED` summary metric card.
+- Add a `Rejoins` period chart dimension that compares first pledges and rejoined pledges over time.
+- Mark repeated 가입 records as `Rejoin` in the List table.
+- Add a `Status: Rejoined` filter to quickly inspect likely canceled-and-resubscribed members.
+
+### Changed
+
+- Rejoin detection uses the full Gmail history as context, then counts only rows inside the selected date range.
+
 ## 2.0.0 - 2026-05-12
 
 ### Changed
