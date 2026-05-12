@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import csv
 import datetime as dt
 import json
@@ -143,7 +144,13 @@ TIER_COLORS = {
     "needs_review": "review",
 }
 
-RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12개월", "전체", "사용자 지정"]
+RANGE_PRESETS = ["지난 30일", "반년", "1년", "전체", "사용자 지정"]
+RANGE_PRESET_ALIASES = {
+    "지난 24시간": "지난 30일",
+    "지난 6개월": "반년",
+    "지난 12개월": "1년",
+    "지난 1년": "1년",
+}
 GROUP_OPTIONS = ["매일", "매주", "매월"]
 INSIGHT_DIMENSIONS = ["전체", "재구독", "멤버십 등급", "청구 주기", "결제 상태", "유료 전환 경로"]
 SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
@@ -179,6 +186,9 @@ class PatreonMemberApp(tk.Tk):
         self.app_settings["dark_mode"] = True
         self.dark_mode_var = tk.BooleanVar(value=True)
         self.range_var = tk.StringVar(value=str(self.app_settings.get("range_preset", "지난 30일")))
+        if self.range_var.get() in RANGE_PRESET_ALIASES:
+            self.range_var.set(RANGE_PRESET_ALIASES[self.range_var.get()])
+            self.app_settings["range_preset"] = self.range_var.get()
         if self.range_var.get() not in RANGE_PRESETS:
             self.range_var.set("지난 30일")
         self.group_var = tk.StringVar(value=str(self.app_settings.get("group_unit", "매일")))
@@ -1066,7 +1076,7 @@ class PatreonMemberApp(tk.Tk):
     def _open_date_range_dialog(self) -> None:
         dialog = tk.Toplevel(self)
         dialog.title("기간 설정")
-        dialog.geometry("420x300")
+        dialog.geometry("460x340")
         dialog.transient(self)
         dialog.grab_set()
         dialog.configure(bg=self.palette["content"])
@@ -1081,11 +1091,27 @@ class PatreonMemberApp(tk.Tk):
         range_box.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=6)
         range_box.bind("<<ComboboxSelected>>", lambda _event: self.on_range_changed())
         tk.Label(form, text="시작일", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
-        self.after_entry = ttk.Entry(form, textvariable=self.after_var, width=26)
-        self.after_entry.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=6)
+        after_row = tk.Frame(form, bg=self.palette["panel"])
+        after_row.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=6)
+        after_row.columnconfigure(0, weight=1)
+        self.after_entry = ttk.Entry(after_row, textvariable=self.after_var, width=22)
+        self.after_entry.grid(row=0, column=0, sticky="ew")
+        self._calendar_button(after_row, lambda: self._open_calendar_popup(self.after_var, "시작일 선택")).grid(
+            row=0,
+            column=1,
+            padx=(8, 0),
+        )
         tk.Label(form, text="종료일", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w", pady=6)
-        self.before_entry = ttk.Entry(form, textvariable=self.before_var, width=26)
-        self.before_entry.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=6)
+        before_row = tk.Frame(form, bg=self.palette["panel"])
+        before_row.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=6)
+        before_row.columnconfigure(0, weight=1)
+        self.before_entry = ttk.Entry(before_row, textvariable=self.before_var, width=22)
+        self.before_entry.grid(row=0, column=0, sticky="ew")
+        self._calendar_button(before_row, lambda: self._open_calendar_popup(self.before_var, "종료일 선택")).grid(
+            row=0,
+            column=1,
+            padx=(8, 0),
+        )
         form.columnconfigure(1, weight=1)
         self._apply_range_preset_to_entries()
 
@@ -1115,6 +1141,131 @@ class PatreonMemberApp(tk.Tk):
             cursor="hand2",
             font=("Segoe UI", 11),
         ).pack(side=tk.RIGHT, padx=(0, 10))
+
+    def _calendar_button(self, parent: tk.Widget, command) -> tk.Button:
+        return tk.Button(
+            parent,
+            text="달력",
+            command=command,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            activebackground=self.palette["select_bg"],
+            activeforeground=self.palette["ink"],
+            padx=10,
+            pady=5,
+            cursor="hand2",
+            font=("Malgun Gothic", 9, "bold"),
+        )
+
+    def _open_calendar_popup(self, variable: tk.StringVar, title: str) -> None:
+        parsed = self._parse_date_text(variable.get().strip())
+        selected = parsed if isinstance(parsed, dt.date) else dt.date.today()
+        state = {"year": selected.year, "month": selected.month}
+        popup = tk.Toplevel(self)
+        popup.title(title)
+        popup.geometry("330x360")
+        popup.transient(self)
+        popup.grab_set()
+        popup.configure(bg=self.palette["panel"])
+
+        header = tk.Frame(popup, bg=self.palette["panel"])
+        header.pack(fill=tk.X, padx=16, pady=(16, 8))
+        month_label = tk.Label(
+            header,
+            bg=self.palette["panel"],
+            fg=self.palette["ink"],
+            font=("Malgun Gothic", 13, "bold"),
+        )
+        month_label.pack(side=tk.LEFT, expand=True)
+        days = tk.Frame(popup, bg=self.palette["panel"])
+        days.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 16))
+
+        def move_month(delta: int) -> None:
+            month = state["month"] + delta
+            year = state["year"]
+            if month < 1:
+                year -= 1
+                month = 12
+            elif month > 12:
+                year += 1
+                month = 1
+            state["year"] = year
+            state["month"] = month
+            render()
+
+        tk.Button(
+            header,
+            text="<",
+            command=lambda: move_month(-1),
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            width=3,
+            cursor="hand2",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        month_label.pack_forget()
+        month_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(
+            header,
+            text=">",
+            command=lambda: move_month(1),
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            width=3,
+            cursor="hand2",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(side=tk.RIGHT, padx=(8, 0))
+
+        def choose(day: dt.date) -> None:
+            self._set_custom_range_date(variable, day)
+            popup.destroy()
+
+        def render() -> None:
+            for child in days.winfo_children():
+                child.destroy()
+            year = state["year"]
+            month = state["month"]
+            month_label.configure(text=f"{year}년 {month}월")
+            for column, text in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
+                tk.Label(
+                    days,
+                    text=text,
+                    bg=self.palette["panel"],
+                    fg=self.palette["muted"],
+                    font=("Malgun Gothic", 9, "bold"),
+                ).grid(row=0, column=column, sticky="nsew", padx=1, pady=(0, 5))
+                days.columnconfigure(column, weight=1)
+            month_days = calendar.Calendar(firstweekday=0).monthdatescalendar(year, month)
+            for row_index, week in enumerate(month_days, start=1):
+                for column, day in enumerate(week):
+                    in_month = day.month == month
+                    is_selected = day == selected
+                    button = tk.Button(
+                        days,
+                        text=str(day.day),
+                        command=lambda value=day: choose(value),
+                        bd=0,
+                        bg=self.palette["select_bg"] if is_selected else self.palette["control_bg"],
+                        fg=self.palette["ink"] if in_month else self.palette["muted"],
+                        activebackground=self.palette["select_bg"],
+                        activeforeground=self.palette["ink"],
+                        cursor="hand2",
+                        font=("Segoe UI", 10, "bold" if is_selected else "normal"),
+                    )
+                    button.grid(row=row_index, column=column, sticky="nsew", padx=1, pady=1, ipady=6)
+                    days.rowconfigure(row_index, weight=1)
+
+        render()
+
+    def _set_custom_range_date(self, variable: tk.StringVar, selected_date: dt.date) -> None:
+        variable.set(selected_date.strftime("%Y/%m/%d"))
+        self.range_var.set("사용자 지정")
+        self.app_settings["range_preset"] = "사용자 지정"
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._apply_range_preset_to_entries()
 
     def _configure_tree_tags(self) -> None:
         if hasattr(self, "tree"):
@@ -2011,13 +2162,11 @@ class PatreonMemberApp(tk.Tk):
 
     def _range_dates(self, preset: str) -> tuple[dt.date | None | str, dt.date | None | str]:
         today = dt.date.today()
-        if preset == "지난 24시간":
-            return today - dt.timedelta(days=1), today
         if preset == "지난 30일":
             return today - dt.timedelta(days=29), today
-        if preset == "지난 6개월":
+        if preset in {"반년", "지난 6개월"}:
             return add_months(today, -6), today
-        if preset == "지난 12개월":
+        if preset in {"1년", "지난 1년", "지난 12개월"}:
             return add_months(today, -12), today
         if preset == "전체":
             return None, None

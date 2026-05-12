@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.7.0 - 2026-05-12
+
+### Added
+
+- Add calendar pickers for the start and end date fields in the date range dialog.
+- Add a custom range mode automatically when a calendar date is selected.
+
+### Changed
+
+- Simplify date range presets to `지난 30일`, `반년`, `1년`, `전체`, and `사용자 지정`.
+- Map older saved range presets such as `지난 6개월` and `지난 12개월` to the new labels.
+
 ## 2.6.2 - 2026-05-12
 
 ### Fixed
