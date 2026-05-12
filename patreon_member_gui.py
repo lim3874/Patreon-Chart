@@ -147,6 +147,9 @@ RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12
 GROUP_OPTIONS = ["매일", "매주", "매월"]
 INSIGHT_DIMENSIONS = ["전체", "재구독", "멤버십 등급", "청구 주기", "결제 상태", "유료 전환 경로"]
 SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
+GMAIL_REFRESH_TEXT = "▭  Gmail에서 불러오기"
+PATREON_REFRESH_TEXT = "현재 멤버 불러오기"
+LOADING_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
 class PatreonMemberApp(tk.Tk):
@@ -166,6 +169,9 @@ class PatreonMemberApp(tk.Tk):
         self.rejoin_row_keys: set[tuple[str, str, str, str]] = set()
         self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self.is_running = False
+        self.loading_after_id: str | None = None
+        self.loading_frame_index = 0
+        self.loading_context: str | None = None
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.app_settings["dark_mode"] = True
@@ -566,7 +572,7 @@ class PatreonMemberApp(tk.Tk):
         actions.pack(side=tk.RIGHT, padx=24)
         self.date_button = self._pill_button(actions, "▣  기간 설정", self._open_date_range_dialog, primary=False)
         self.date_button.pack(side=tk.LEFT, padx=(0, 12))
-        self.refresh_button = self._pill_button(actions, "▭  Gmail에서 불러오기", self.refresh_from_gmail, primary=True)
+        self.refresh_button = self._pill_button(actions, GMAIL_REFRESH_TEXT, self.refresh_from_gmail, primary=True)
         self.refresh_button.pack(side=tk.LEFT, padx=(0, 22))
         tk.Frame(actions, bg=p["line"], width=1, height=42).pack(side=tk.LEFT, padx=(0, 18))
         self._icon_button(actions, "⚙", self.open_config).pack(side=tk.LEFT, padx=7)
@@ -585,6 +591,7 @@ class PatreonMemberApp(tk.Tk):
             fg=p["ink"],
             activebackground=p["select_bg"],
             activeforeground=p["ink"],
+            disabledforeground=p["muted"],
             highlightbackground=p["line"],
             highlightcolor=p["line"],
             padx=18,
@@ -848,11 +855,12 @@ class PatreonMemberApp(tk.Tk):
         ).pack(side=tk.LEFT, padx=(0, 12))
         self.patreon_refresh_button = tk.Button(
             toolbar,
-            text="현재 멤버 불러오기",
+            text=PATREON_REFRESH_TEXT,
             command=self.refresh_from_patreon,
             bd=0,
             bg=self.palette["primary_soft"],
             fg="#082454",
+            disabledforeground=self.palette["muted"],
             padx=18,
             pady=10,
             cursor="hand2",
@@ -1172,6 +1180,42 @@ class PatreonMemberApp(tk.Tk):
             return f"{end:%Y/%m/%d}까지"
         return "전체 기간"
 
+    def _start_loading(self, context: str) -> None:
+        self.is_running = True
+        self.loading_context = context
+        self.loading_frame_index = 0
+        if hasattr(self, "refresh_button"):
+            self.refresh_button.configure(state=tk.DISABLED)
+        if hasattr(self, "patreon_refresh_button"):
+            self.patreon_refresh_button.configure(state=tk.DISABLED)
+        self._animate_loading_button()
+
+    def _animate_loading_button(self) -> None:
+        if not self.loading_context:
+            return
+        frame = LOADING_FRAMES[self.loading_frame_index % len(LOADING_FRAMES)]
+        self.loading_frame_index += 1
+        if self.loading_context == "gmail" and hasattr(self, "refresh_button"):
+            self.refresh_button.configure(text=f"{frame}  Gmail 불러오는 중...")
+        elif self.loading_context == "patreon" and hasattr(self, "patreon_refresh_button"):
+            self.patreon_refresh_button.configure(text=f"{frame}  Patreon 불러오는 중...")
+        self.loading_after_id = self.after(160, self._animate_loading_button)
+
+    def _stop_loading(self) -> None:
+        if self.loading_after_id is not None:
+            try:
+                self.after_cancel(self.loading_after_id)
+            except tk.TclError:
+                pass
+            self.loading_after_id = None
+        self.loading_context = None
+        self.loading_frame_index = 0
+        self.is_running = False
+        if hasattr(self, "refresh_button"):
+            self.refresh_button.configure(text=GMAIL_REFRESH_TEXT, state=tk.NORMAL)
+        if hasattr(self, "patreon_refresh_button"):
+            self.patreon_refresh_button.configure(text=PATREON_REFRESH_TEXT, state=tk.NORMAL)
+
     def refresh_from_gmail(self) -> None:
         if self.is_running:
             return
@@ -1185,8 +1229,7 @@ class PatreonMemberApp(tk.Tk):
         if start_text == "invalid" or end_text == "invalid":
             messagebox.showwarning("날짜 형식", "날짜는 YYYY/MM/DD 또는 YYYY-MM-DD 형식으로 입력하세요.")
             return
-        self.is_running = True
-        self.refresh_button.configure(state=tk.DISABLED)
+        self._start_loading("gmail")
         self.status_var.set("Gmail에서 Patreon 가입 메일을 읽는 중입니다.")
         worker = threading.Thread(target=self._gmail_worker, args=(start_text, end_text), daemon=True)
         worker.start()
@@ -1201,8 +1244,7 @@ class PatreonMemberApp(tk.Tk):
             )
             self.open_patreon_settings()
             return
-        self.is_running = True
-        self.patreon_refresh_button.configure(state=tk.DISABLED)
+        self._start_loading("patreon")
         self.patreon_status_var.set("Patreon API에서 현재 멤버를 읽는 중입니다.")
         worker = threading.Thread(target=self._patreon_worker, daemon=True)
         worker.start()
@@ -1265,6 +1307,7 @@ class PatreonMemberApp(tk.Tk):
         try:
             while True:
                 event, payload = self.worker_queue.get_nowait()
+                self._stop_loading()
                 if event == "success":
                     self.rows = list(payload)  # type: ignore[arg-type]
                     self.apply_filters()
@@ -1291,10 +1334,6 @@ class PatreonMemberApp(tk.Tk):
                         "Patreon API 오류",
                         "Patreon API 작업 중 오류가 발생했습니다.\n\n자세한 내용은 output\\patreon_api_error.log를 확인하세요.",
                     )
-                self.is_running = False
-                self.refresh_button.configure(state=tk.NORMAL)
-                if hasattr(self, "patreon_refresh_button"):
-                    self.patreon_refresh_button.configure(state=tk.NORMAL)
         except queue.Empty:
             pass
         self.after(200, self._poll_worker_queue)

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.0 - 2026-05-12
+
+### Added
+
+- Add animated loading text to the `Gmail에서 불러오기` button while Gmail import is running.
+- Add the same loading feedback to the Patreon current-member import button.
+
+### Changed
+
+- Restore import button labels and enabled state through one shared loading-state path after background work finishes.
+
 ## 2.3.0 - 2026-05-12
 
 ### Added
