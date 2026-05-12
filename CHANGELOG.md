@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.0.0 - 2026-05-12
+
+### Changed
+
+- Rebuild the desktop UI around the new Creator Analytics design:
+  - left sidebar navigation
+  - fixed top action bar
+  - card-based summary metrics
+  - modern dark table view
+  - segmented period chart controls
+  - redesigned Patreon API workspace
+- Replace the old notebook-tab layout with sidebar page navigation for Summary, Period, List, and Patreon API.
+- Convert the main dashboard labels and table headers to the Analytics Engine layout language.
+- Use a dark-only interface so the app always matches the supplied dashboard design.
+
+### Added
+
+- Add member search, tier filtering, and status filtering to the List view toolbar.
+- Add top-bar shortcuts for date range, Gmail import, settings, output folder, and Patreon API settings.
+
 ## 1.2.2 - 2026-05-12
 
 ### Fixed

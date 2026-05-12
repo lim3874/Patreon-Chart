@@ -50,17 +50,17 @@ APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v2.ico"
 APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v2.png"
 
 TABLE_COLUMNS = [
-    ("event_type", "항목", 110),
-    ("received_at", "수신일", 170),
-    ("member_name", "이름", 170),
-    ("member_email", "이메일", 240),
-    ("membership_tier", "멤버십 등급", 120),
-    ("billing_cycle", "청구 주기", 100),
-    ("payment_status", "결제 상태", 150),
-    ("conversion_path", "유료 전환 경로", 140),
-    ("original_amount", "원문 금액", 110),
-    ("usd_estimate", "USD 추정", 100),
-    ("confidence", "판정", 100),
+    ("event_type", "CATEGORY", 130),
+    ("received_at", "RECEIVED DATE", 165),
+    ("member_name", "NAME", 180),
+    ("member_email", "EMAIL", 250),
+    ("membership_tier", "TIER", 135),
+    ("billing_cycle", "CYCLE", 110),
+    ("payment_status", "STATUS", 150),
+    ("conversion_path", "SOURCE", 130),
+    ("original_amount", "AMOUNT", 115),
+    ("usd_estimate", "USD EST.", 100),
+    ("confidence", "CHECK", 100),
 ]
 
 PATREON_TABLE_COLUMNS = [
@@ -92,26 +92,46 @@ LIGHT_THEME = {
     "select_fg": "#172033",
     "tab_selected": "#ffffff",
     "control_bg": "#ffffff",
+    "primary": "#2563eb",
+    "primary_soft": "#bfdbfe",
+    "success": "#059669",
+    "danger": "#dc2626",
+    "warning": "#d97706",
+    "row_alt": "#f3f6fb",
+    "table_header": "#e1e7f0",
+    "sidebar": "#eef2f6",
+    "content": "#f5f6f8",
+    "topbar": "#ffffff",
 }
 
 DARK_THEME = {
-    "bg": "#0d121b",
-    "panel": "#151c29",
-    "panel_alt": "#1b2434",
-    "ink": "#f1eee8",
-    "muted": "#918e8b",
-    "line": "#a4a09a",
-    "accent": "#338ccf",
-    "accent_2": "#ffb77c",
-    "accent_3": "#88df3f",
-    "accent_4": "#ffe047",
-    "review": "#a78bfa",
-    "track": "#243044",
-    "table_review": "#2b241a",
-    "select_bg": "#23374d",
-    "select_fg": "#f8fafc",
-    "tab_selected": "#151c29",
-    "control_bg": "#1b2434",
+    "bg": "#080e1d",
+    "sidebar": "#090f20",
+    "content": "#0b1120",
+    "topbar": "#0d1324",
+    "panel": "#151d30",
+    "panel_alt": "#222b40",
+    "ink": "#e9efff",
+    "muted": "#9aa6bd",
+    "line": "#253149",
+    "accent": "#9db8ef",
+    "accent_2": "#d79b76",
+    "accent_3": "#55e0aa",
+    "accent_4": "#f18a1b",
+    "review": "#8f98aa",
+    "track": "#26304a",
+    "table_review": "#251d2d",
+    "select_bg": "#24385f",
+    "select_fg": "#f8fbff",
+    "tab_selected": "#202a40",
+    "control_bg": "#0d1528",
+    "primary": "#4d8dff",
+    "primary_soft": "#a9c2ff",
+    "success": "#5be7ad",
+    "danger": "#ff8f9a",
+    "warning": "#ffb779",
+    "row_alt": "#121a2c",
+    "table_header": "#252e43",
 }
 
 TIER_COLORS = {
@@ -123,9 +143,9 @@ TIER_COLORS = {
 }
 
 RANGE_PRESETS = ["지난 24시간", "지난 30일", "지난 6개월", "지난 12개월", "전체", "사용자 지정"]
-GROUP_OPTIONS = ["매일", "매주", "매월"]
-INSIGHT_DIMENSIONS = ["전체", "멤버십 등급", "청구 주기", "결제 상태", "유료로 전환하는 경로"]
-SERIES_COLORS = ["#338ccf", "#ffb77c", "#88df3f", "#ffe047", "#a78bfa", "#2dd4bf"]
+GROUP_OPTIONS = ["Daily", "Weekly", "Monthly"]
+INSIGHT_DIMENSIONS = ["All", "Membership Tier", "Billing Cycle", "Payment Status", "Paid Path"]
+SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
 
 
 class PatreonMemberApp(tk.Tk):
@@ -134,8 +154,8 @@ class PatreonMemberApp(tk.Tk):
         self.title("Patreon Gmail Member Exporter")
         self._icon_image: tk.PhotoImage | None = None
         self._apply_window_icon()
-        self.geometry("1240x820")
-        self.minsize(1040, 660)
+        self.geometry("1280x820")
+        self.minsize(1120, 720)
 
         self.rows: list[dict[str, str]] = []
         self.visible_rows: list[dict[str, str]] = []
@@ -144,17 +164,35 @@ class PatreonMemberApp(tk.Tk):
         self.is_running = False
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
-        self.dark_mode_var = tk.BooleanVar(value=bool(self.app_settings.get("dark_mode", True)))
+        self.app_settings["dark_mode"] = True
+        self.dark_mode_var = tk.BooleanVar(value=True)
         self.range_var = tk.StringVar(value=str(self.app_settings.get("range_preset", "지난 30일")))
         if self.range_var.get() not in RANGE_PRESETS:
             self.range_var.set("지난 30일")
         self.group_var = tk.StringVar(value=str(self.app_settings.get("group_unit", "매일")))
+        if self.group_var.get() == "매일":
+            self.group_var.set("Daily")
+        elif self.group_var.get() == "매주":
+            self.group_var.set("Weekly")
+        elif self.group_var.get() == "매월":
+            self.group_var.set("Monthly")
         if self.group_var.get() not in GROUP_OPTIONS:
-            self.group_var.set("매일")
+            self.group_var.set("Daily")
         self.insight_dimension_var = tk.StringVar(value=str(self.app_settings.get("insight_dimension", "결제 상태")))
+        legacy_dimensions = {
+            "전체": "All",
+            "멤버십 등급": "Membership Tier",
+            "청구 주기": "Billing Cycle",
+            "결제 상태": "Payment Status",
+            "유료로 전환하는 경로": "Paid Path",
+        }
+        if self.insight_dimension_var.get() in legacy_dimensions:
+            self.insight_dimension_var.set(legacy_dimensions[self.insight_dimension_var.get()])
         if self.insight_dimension_var.get() not in INSIGHT_DIMENSIONS:
-            self.insight_dimension_var.set("결제 상태")
-        self.tier_filter_var = tk.StringVar(value="전체")
+            self.insight_dimension_var.set("Payment Status")
+        self.search_var = tk.StringVar(value="")
+        self.status_filter_var = tk.StringVar(value="Status: All")
+        self.tier_filter_var = tk.StringVar(value="All Tiers")
         self.after_var = tk.StringVar(value="")
         self.before_var = tk.StringVar(value="")
         self.current_start_date: dt.date | None = None
@@ -308,8 +346,8 @@ class PatreonMemberApp(tk.Tk):
         style.map("TNotebook.Tab", background=[("selected", p["tab_selected"])], foreground=[("selected", p["ink"])])
         style.configure(
             "Treeview",
-            rowheight=31,
-            font=("Malgun Gothic", 10),
+            rowheight=48,
+            font=("Segoe UI", 11),
             background=p["panel"],
             fieldbackground=p["panel"],
             foreground=p["ink"],
@@ -321,8 +359,8 @@ class PatreonMemberApp(tk.Tk):
         )
         style.configure(
             "Treeview.Heading",
-            font=("Malgun Gothic", 10, "bold"),
-            background=p["panel_alt"],
+            font=("Segoe UI", 10, "bold"),
+            background=p.get("table_header", p["panel_alt"]),
             foreground=p["ink"],
             bordercolor=p["line"],
             lightcolor=p["line"],
@@ -343,68 +381,222 @@ class PatreonMemberApp(tk.Tk):
             )
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=(18, 22, 18, 14))
-        root.pack(fill=tk.BOTH, expand=True)
-        self.root_frame = root
-
-        header = ttk.Frame(root)
-        header.pack(fill=tk.X)
-        ttk.Label(header, text="Patreon 가입자 대시보드", style="Title.TLabel").pack(side=tk.LEFT)
-        right_header = ttk.Frame(header)
-        right_header.pack(side=tk.RIGHT)
-        ttk.Checkbutton(
-            right_header,
-            text="다크 모드",
-            variable=self.dark_mode_var,
-            command=self.toggle_theme,
-        ).pack(side=tk.RIGHT, padx=(14, 0))
+        p = self.palette
+        self.configure(bg=p["content"])
         self.status_var = tk.StringVar(value="기존 결과를 불러오는 중입니다.")
-        ttk.Label(right_header, textvariable=self.status_var, style="Muted.TLabel").pack(side=tk.RIGHT)
+        self.patreon_status_var = tk.StringVar(value="Patreon API 설정 후 현재 멤버를 불러올 수 있습니다.")
+        self.metric_vars = {
+            "total": tk.StringVar(value="0"),
+            "tier1": tk.StringVar(value="0"),
+            "tier2": tk.StringVar(value="0"),
+            "tier3": tk.StringVar(value="0"),
+            "tier4": tk.StringVar(value="0"),
+            "review": tk.StringVar(value="0"),
+        }
+        self.patreon_metric_vars = {
+            "total": tk.StringVar(value="0"),
+            "active": tk.StringVar(value="0"),
+            "declined": tk.StringVar(value="0"),
+            "former": tk.StringVar(value="0"),
+        }
 
-        controls = ttk.Frame(root, padding=(0, 18, 0, 12))
-        controls.pack(fill=tk.X)
-        ttk.Label(controls, text="기간").pack(side=tk.LEFT)
-        self.range_box = ttk.Combobox(
-            controls,
-            textvariable=self.range_var,
-            values=RANGE_PRESETS,
-            width=13,
-            state="readonly",
-        )
-        self.range_box.pack(side=tk.LEFT, padx=(6, 14))
-        self.range_box.bind("<<ComboboxSelected>>", lambda _event: self.on_range_changed())
-        ttk.Label(controls, text="시작일").pack(side=tk.LEFT)
-        self.after_entry = ttk.Entry(controls, textvariable=self.after_var, width=13)
-        self.after_entry.pack(side=tk.LEFT, padx=(6, 14))
-        ttk.Label(controls, text="종료일").pack(side=tk.LEFT)
-        self.before_entry = ttk.Entry(controls, textvariable=self.before_var, width=13)
-        self.before_entry.pack(side=tk.LEFT, padx=(6, 14))
-        ttk.Button(controls, text="기간 적용", command=self.apply_filters).pack(side=tk.LEFT, padx=(0, 8))
-        self.refresh_button = ttk.Button(
-            controls,
-            text="Gmail에서 새로 불러오기",
-            style="Accent.TButton",
-            command=self.refresh_from_gmail,
-        )
-        self.refresh_button.pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(controls, text="결과 폴더", command=self.open_output_folder).pack(side=tk.LEFT, padx=4)
-        ttk.Button(controls, text="설정 파일", command=self.open_config).pack(side=tk.LEFT, padx=4)
+        shell = tk.Frame(self, bg=p["content"])
+        shell.pack(fill=tk.BOTH, expand=True)
+        self.root_frame = shell
 
-        self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
-        self.summary_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
-        self.period_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
-        self.table_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
-        self.patreon_tab = ttk.Frame(self.notebook, padding=(12, 14, 12, 12))
-        self.notebook.add(self.summary_tab, text="요약")
-        self.notebook.add(self.period_tab, text="기간별")
-        self.notebook.add(self.table_tab, text="목록")
-        self.notebook.add(self.patreon_tab, text="Patreon API")
+        self.sidebar = tk.Frame(shell, bg=p["sidebar"], width=256)
+        self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        self.sidebar.pack_propagate(False)
+
+        self.main_area = tk.Frame(shell, bg=p["content"])
+        self.main_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self._build_sidebar()
+        self._build_topbar()
+
+        self.page_host = tk.Frame(self.main_area, bg=p["content"])
+        self.page_host.pack(fill=tk.BOTH, expand=True, padx=32, pady=32)
+        self.page_host.columnconfigure(0, weight=1)
+        self.page_host.rowconfigure(0, weight=1)
+
+        self.pages: dict[str, tk.Frame] = {}
+        self.summary_tab = tk.Frame(self.page_host, bg=p["content"])
+        self.period_tab = tk.Frame(self.page_host, bg=p["content"])
+        self.table_tab = tk.Frame(self.page_host, bg=p["content"])
+        self.patreon_tab = tk.Frame(self.page_host, bg=p["content"])
+        self.pages = {
+            "summary": self.summary_tab,
+            "period": self.period_tab,
+            "list": self.table_tab,
+            "patreon": self.patreon_tab,
+        }
 
         self._build_summary_tab()
         self._build_period_tab()
         self._build_table_tab()
         self._build_patreon_tab()
+        self._show_page("summary")
+
+    def _build_sidebar(self) -> None:
+        p = self.palette
+        top = tk.Frame(self.sidebar, bg=p["sidebar"])
+        top.pack(fill=tk.X, padx=24, pady=(28, 36))
+
+        avatar = tk.Canvas(top, width=44, height=44, bg=p["sidebar"], highlightthickness=0)
+        avatar.pack(side=tk.LEFT, padx=(0, 14))
+        avatar.create_oval(3, 3, 41, 41, fill=p["panel_alt"], outline=p["line"], width=1)
+        avatar.create_text(22, 22, text="CA", fill=p["primary_soft"], font=("Segoe UI", 10, "bold"))
+
+        title_box = tk.Frame(top, bg=p["sidebar"])
+        title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(
+            title_box,
+            text="Creator\nAnalytics",
+            bg=p["sidebar"],
+            fg=p["primary_soft"],
+            justify=tk.LEFT,
+            font=("Segoe UI", 20, "bold"),
+        ).pack(anchor=tk.W)
+        tk.Label(
+            title_box,
+            text="Premium Tier",
+            bg=p["sidebar"],
+            fg=p["muted"],
+            font=("Segoe UI", 10),
+        ).pack(anchor=tk.W, pady=(2, 0))
+
+        self.nav_buttons: dict[str, tk.Button] = {}
+        nav = tk.Frame(self.sidebar, bg=p["sidebar"])
+        nav.pack(fill=tk.X, padx=16)
+        for key, icon, label in [
+            ("summary", "▦", "Summary"),
+            ("period", "▣", "Period"),
+            ("list", "☷", "List"),
+            ("patreon", "◆", "Patreon API"),
+        ]:
+            self.nav_buttons[key] = self._nav_button(nav, key, icon, label)
+
+        bottom = tk.Frame(self.sidebar, bg=p["sidebar"])
+        bottom.pack(side=tk.BOTTOM, fill=tk.X, padx=24, pady=(0, 24))
+        tk.Frame(bottom, bg=p["line"], height=1).pack(fill=tk.X, pady=(0, 24))
+        tk.Button(
+            bottom,
+            text="Results Folder  →",
+            command=self.open_output_folder,
+            bd=0,
+            bg=p["primary_soft"],
+            fg="#082454",
+            activebackground="#c1d4ff",
+            activeforeground="#082454",
+            padx=18,
+            pady=12,
+            cursor="hand2",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(fill=tk.X)
+
+    def _nav_button(self, parent: tk.Frame, key: str, icon: str, label: str) -> tk.Button:
+        p = self.palette
+        button = tk.Button(
+            parent,
+            text=f"{icon}   {label}",
+            command=lambda: self._show_page(key),
+            anchor=tk.W,
+            bd=0,
+            bg=p["sidebar"],
+            fg=p["ink"],
+            activebackground=p["panel"],
+            activeforeground=p["ink"],
+            padx=18,
+            pady=13,
+            cursor="hand2",
+            font=("Segoe UI", 12, "bold" if key == "summary" else "normal"),
+        )
+        button.pack(fill=tk.X, pady=5)
+        return button
+
+    def _build_topbar(self) -> None:
+        p = self.palette
+        bar = tk.Frame(self.main_area, bg=p["topbar"], height=78, highlightbackground=p["line"], highlightthickness=0)
+        bar.pack(fill=tk.X)
+        bar.pack_propagate(False)
+        tk.Frame(bar, bg=p["line"], height=1).pack(side=tk.BOTTOM, fill=tk.X)
+
+        title = tk.Label(
+            bar,
+            text="Analytics Engine",
+            bg=p["topbar"],
+            fg=p["ink"],
+            font=("Segoe UI", 20, "bold"),
+        )
+        title.pack(side=tk.LEFT, padx=(32, 0))
+
+        actions = tk.Frame(bar, bg=p["topbar"])
+        actions.pack(side=tk.RIGHT, padx=24)
+        self.date_button = self._pill_button(actions, "▣  Date Range", self._open_date_range_dialog, primary=False)
+        self.date_button.pack(side=tk.LEFT, padx=(0, 12))
+        self.refresh_button = self._pill_button(actions, "▭  Import from Gmail", self.refresh_from_gmail, primary=True)
+        self.refresh_button.pack(side=tk.LEFT, padx=(0, 22))
+        tk.Frame(actions, bg=p["line"], width=1, height=42).pack(side=tk.LEFT, padx=(0, 18))
+        self._icon_button(actions, "⚙", self.open_config).pack(side=tk.LEFT, padx=7)
+        self._icon_button(actions, "⎋", self.open_output_folder).pack(side=tk.LEFT, padx=7)
+        self._icon_button(actions, "◎", self.open_patreon_settings).pack(side=tk.LEFT, padx=7)
+
+    def _pill_button(self, parent: tk.Frame, text: str, command, primary: bool = False) -> tk.Button:
+        p = self.palette
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bd=1,
+            relief=tk.SOLID,
+            bg=p["panel_alt"] if primary else p["control_bg"],
+            fg=p["ink"],
+            activebackground=p["select_bg"],
+            activeforeground=p["ink"],
+            highlightbackground=p["line"],
+            highlightcolor=p["line"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 12, "bold" if primary else "normal"),
+        )
+
+    def _icon_button(self, parent: tk.Frame, text: str, command) -> tk.Button:
+        p = self.palette
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bd=0,
+            bg=p["topbar"],
+            fg=p["ink"],
+            activebackground=p["panel"],
+            activeforeground=p["primary_soft"],
+            width=2,
+            cursor="hand2",
+            font=("Segoe UI Symbol", 18),
+        )
+
+    def _show_page(self, page: str) -> None:
+        for frame in self.pages.values():
+            frame.grid_forget()
+        self.pages[page].grid(row=0, column=0, sticky="nsew")
+        self.current_page = page
+        p = self.palette
+        for key, button in self.nav_buttons.items():
+            selected = key == page
+            button.configure(
+                bg=p["panel"] if selected else p["sidebar"],
+                fg=p["primary_soft"] if selected else p["ink"],
+                font=("Segoe UI", 12, "bold" if selected else "normal"),
+            )
+        self.after(50, self._redraw_visible_charts)
+
+    def _redraw_visible_charts(self) -> None:
+        if hasattr(self, "tier_chart"):
+            self._draw_tier_chart(self.visible_rows)
+        if hasattr(self, "period_chart"):
+            self._draw_period_chart(self.visible_rows)
 
     def _apply_window_icon(self) -> None:
         if APP_ICON_PATH.exists():
@@ -422,93 +614,135 @@ class PatreonMemberApp(tk.Tk):
                 self._icon_image = None
 
     def _build_summary_tab(self) -> None:
-        self.metrics_frame = ttk.Frame(self.summary_tab)
-        self.metrics_frame.pack(fill=tk.X, pady=(0, 12))
-        self.metric_vars = {
-            "total": tk.StringVar(value="0"),
-            "tier1": tk.StringVar(value="0"),
-            "tier2": tk.StringVar(value="0"),
-            "tier3": tk.StringVar(value="0"),
-            "tier4": tk.StringVar(value="0"),
-            "review": tk.StringVar(value="0"),
-        }
-        for label, key in [
-            ("전체", "total"),
-            ("티어 1", "tier1"),
-            ("티어 2", "tier2"),
-            ("티어 3", "tier3"),
-            ("티어 4", "tier4"),
-            ("확인필요", "review"),
-        ]:
-            self._metric_card(self.metrics_frame, label, self.metric_vars[key]).pack(
-                side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
-            )
+        for column in range(3):
+            self.summary_tab.columnconfigure(column, weight=1, uniform="summary_cards")
+        self.summary_tab.rowconfigure(2, weight=1)
+        for index, (label, key, detail, color_key) in enumerate(
+            [
+                ("TOTAL MEMBERS", "total", "↑12%", "success"),
+                ("TIER 1", "tier1", "Members", "accent_2"),
+                ("TIER 2", "tier2", "↑5%", "accent"),
+                ("TIER 3", "tier3", "Member", "accent_4"),
+                ("TIER 4", "tier4", "Members", "review"),
+                ("NEEDS CHECK", "review", "Action Req.", "review"),
+            ]
+        ):
+            card = self._metric_card(self.summary_tab, label, self.metric_vars[key], detail, color_key)
+            card.grid(row=index // 3, column=index % 3, sticky="nsew", padx=(0 if index % 3 == 0 else 10, 0), pady=(0, 18))
 
-        chart_panel = ttk.Frame(self.summary_tab, style="Panel.TFrame", padding=16)
-        chart_panel.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(chart_panel, text="티어 분포", style="Panel.TLabel", font=("Malgun Gothic", 13, "bold")).pack(anchor=tk.W)
-        self.tier_chart = tk.Canvas(chart_panel, height=360, bg=self.palette["panel"], highlightthickness=0)
-        self.tier_chart.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
+        chart_panel = self._card_frame(self.summary_tab)
+        chart_panel.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(22, 0))
+        chart_panel.rowconfigure(1, weight=1)
+        chart_panel.columnconfigure(0, weight=1)
+        tk.Label(
+            chart_panel,
+            text="Tier Distribution",
+            bg=self.palette["panel"],
+            fg=self.palette["ink"],
+            font=("Segoe UI", 16, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=24, pady=(22, 10))
+        self.tier_chart = tk.Canvas(chart_panel, height=310, bg=self.palette["panel"], highlightthickness=0)
+        self.tier_chart.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 22))
         self.tier_chart.bind("<Configure>", lambda _event: self._draw_tier_chart(self.visible_rows))
 
     def _build_period_tab(self) -> None:
-        top = ttk.Frame(self.period_tab)
-        top.pack(fill=tk.X, pady=(0, 12))
-        ttk.Label(top, text="신규 회원", style="Title.TLabel").pack(side=tk.LEFT)
-        ttk.Label(top, text="집계 단위").pack(side=tk.RIGHT, padx=(12, 0))
-        unit_box = ttk.Combobox(
-            top,
-            textvariable=self.group_var,
-            values=GROUP_OPTIONS,
-            width=8,
-            state="readonly",
-        )
-        unit_box.pack(side=tk.RIGHT)
-        unit_box.bind("<<ComboboxSelected>>", lambda _event: self.on_group_changed())
+        self.period_tab.rowconfigure(0, weight=1)
+        self.period_tab.columnconfigure(0, weight=1)
+        panel = self._card_frame(self.period_tab)
+        panel.grid(row=0, column=0, sticky="nsew")
+        panel.rowconfigure(2, weight=1)
+        panel.columnconfigure(0, weight=1)
 
-        panel = ttk.Frame(self.period_tab, style="Panel.TFrame", padding=16)
-        panel.pack(fill=tk.BOTH, expand=True)
-        self.dimension_frame = ttk.Frame(panel, style="Panel.TFrame")
-        self.dimension_frame.pack(fill=tk.X, pady=(0, 12))
+        header = tk.Frame(panel, bg=self.palette["panel"])
+        header.grid(row=0, column=0, sticky="ew", padx=24, pady=(22, 8))
+        tk.Label(header, text="New Members", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
+        group = tk.Frame(header, bg=self.palette["panel_alt"])
+        group.pack(side=tk.RIGHT)
+        self.group_buttons: dict[str, tk.Button] = {}
+        for option in GROUP_OPTIONS:
+            button = tk.Button(
+                group,
+                text=option,
+                command=lambda value=option: self._select_group(value),
+                bd=0,
+                padx=15,
+                pady=8,
+                cursor="hand2",
+                font=("Segoe UI", 10, "bold" if option == self.group_var.get() else "normal"),
+            )
+            button.pack(side=tk.LEFT, padx=2, pady=2)
+            self.group_buttons[option] = button
+        self._refresh_group_buttons()
+
+        self.dimension_frame = tk.Frame(panel, bg=self.palette["panel"])
+        self.dimension_frame.grid(row=1, column=0, sticky="ew", padx=24, pady=(4, 12))
         self.dimension_buttons: dict[str, tk.Button] = {}
         for dimension in INSIGHT_DIMENSIONS:
             button = tk.Button(
                 self.dimension_frame,
                 text=dimension,
                 command=lambda value=dimension: self.select_insight_dimension(value),
-                bd=1,
-                padx=20,
-                pady=12,
-                font=("Malgun Gothic", 11, "bold"),
+                bd=0,
+                padx=14,
+                pady=8,
+                font=("Segoe UI", 10, "bold"),
                 cursor="hand2",
             )
-            button.pack(side=tk.LEFT, padx=(0, 8))
+            button.pack(side=tk.LEFT, padx=(0, 6))
             self.dimension_buttons[dimension] = button
         self._refresh_dimension_buttons()
         self.period_chart = tk.Canvas(panel, height=520, bg=self.palette["panel"], highlightthickness=0)
-        self.period_chart.pack(fill=tk.BOTH, expand=True, pady=(12, 0))
+        self.period_chart.grid(row=2, column=0, sticky="nsew", padx=24, pady=(0, 24))
         self.period_chart.bind("<Configure>", lambda _event: self._draw_period_chart(self.visible_rows))
 
     def _build_table_tab(self) -> None:
-        top = ttk.Frame(self.table_tab)
-        top.pack(fill=tk.X, pady=(0, 10))
-        ttk.Label(top, text="티어 필터").pack(side=tk.LEFT)
+        self.table_tab.rowconfigure(1, weight=1)
+        self.table_tab.columnconfigure(0, weight=1)
+        toolbar = self._card_frame(self.table_tab)
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 24))
+        inner = tk.Frame(toolbar, bg=self.palette["panel"])
+        inner.pack(fill=tk.X, padx=22, pady=22)
+        search = ttk.Entry(inner, textvariable=self.search_var, width=38)
+        search.pack(side=tk.LEFT, ipady=6, padx=(0, 18))
+        search.insert(0, "")
+        search.bind("<KeyRelease>", lambda _event: self._refresh_table())
+        search.configure()
         tier_box = ttk.Combobox(
-            top,
+            inner,
             textvariable=self.tier_filter_var,
-            values=["전체", "티어 1", "티어 2", "티어 3", "티어 4", "확인필요"],
-            width=10,
+            values=["All Tiers", "Tier 1", "Tier 2", "Tier 3", "Tier 4", "Needs Check"],
+            width=14,
             state="readonly",
         )
-        tier_box.pack(side=tk.LEFT, padx=(6, 10))
+        tier_box.pack(side=tk.LEFT, padx=(0, 18), ipady=5)
         tier_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_table())
+        status_box = ttk.Combobox(
+            inner,
+            textvariable=self.status_filter_var,
+            values=["Status: All", "Active Paid", "Payment Completed", "Gift (Other)", "Gift (Self)", "Needs Check"],
+            width=16,
+            state="readonly",
+        )
+        status_box.pack(side=tk.LEFT, padx=(0, 18), ipady=5)
+        status_box.bind("<<ComboboxSelected>>", lambda _event: self._refresh_table())
         self.count_var = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.count_var, style="Muted.TLabel").pack(side=tk.RIGHT)
+        count = tk.Label(
+            inner,
+            textvariable=self.count_var,
+            bg=self.palette["control_bg"],
+            fg=self.palette["ink"],
+            padx=16,
+            pady=8,
+            font=("Segoe UI", 10),
+        )
+        count.pack(side=tk.RIGHT)
 
-        table_panel = ttk.Frame(self.table_tab, style="Panel.TFrame", padding=10)
-        table_panel.pack(fill=tk.BOTH, expand=True)
-        table_wrap = ttk.Frame(table_panel, style="Panel.TFrame")
-        table_wrap.pack(fill=tk.BOTH, expand=True)
+        table_panel = self._card_frame(self.table_tab)
+        table_panel.grid(row=1, column=0, sticky="nsew")
+        table_panel.rowconfigure(0, weight=1)
+        table_panel.columnconfigure(0, weight=1)
+        table_wrap = tk.Frame(table_panel, bg=self.palette["panel"])
+        table_wrap.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         self.tree = ttk.Treeview(
             table_wrap,
             columns=[column for column, _, _ in TABLE_COLUMNS],
@@ -529,42 +763,71 @@ class PatreonMemberApp(tk.Tk):
         self._configure_tree_tags()
 
     def _build_patreon_tab(self) -> None:
-        top = ttk.Frame(self.patreon_tab)
-        top.pack(fill=tk.X, pady=(0, 10))
-        ttk.Button(top, text="Patreon 키 설정", command=self.open_patreon_settings).pack(side=tk.LEFT, padx=(0, 8))
-        self.patreon_refresh_button = ttk.Button(
-            top,
-            text="Patreon에서 현재 멤버 불러오기",
-            style="Accent.TButton",
+        self.patreon_tab.rowconfigure(2, weight=1)
+        for column in range(4):
+            self.patreon_tab.columnconfigure(column, weight=1, uniform="patreon_cards")
+        toolbar = tk.Frame(self.patreon_tab, bg=self.palette["content"])
+        toolbar.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 18))
+        tk.Button(
+            toolbar,
+            text="Patreon Key Settings",
+            command=self.open_patreon_settings,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        self.patreon_refresh_button = tk.Button(
+            toolbar,
+            text="Import Current Members",
             command=self.refresh_from_patreon,
+            bd=0,
+            bg=self.palette["primary_soft"],
+            fg="#082454",
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
         )
-        self.patreon_refresh_button.pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(top, text="Patreon CSV 열기", command=self.open_patreon_csv).pack(side=tk.LEFT, padx=4)
-        self.patreon_status_var = tk.StringVar(value="Patreon API 설정 후 현재 멤버를 불러올 수 있습니다.")
-        ttk.Label(top, textvariable=self.patreon_status_var, style="Muted.TLabel").pack(side=tk.RIGHT)
+        self.patreon_refresh_button.pack(side=tk.LEFT, padx=(0, 12))
+        tk.Button(
+            toolbar,
+            text="Open Patreon CSV",
+            command=self.open_patreon_csv,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            toolbar,
+            textvariable=self.patreon_status_var,
+            bg=self.palette["content"],
+            fg=self.palette["muted"],
+            font=("Segoe UI", 10),
+        ).pack(side=tk.RIGHT)
 
-        metrics = ttk.Frame(self.patreon_tab)
-        metrics.pack(fill=tk.X, pady=(0, 12))
-        self.patreon_metric_vars = {
-            "total": tk.StringVar(value="0"),
-            "active": tk.StringVar(value="0"),
-            "declined": tk.StringVar(value="0"),
-            "former": tk.StringVar(value="0"),
-        }
-        for label, key in [
-            ("전체 멤버", "total"),
-            ("활성", "active"),
-            ("결제 실패", "declined"),
-            ("이전 멤버", "former"),
-        ]:
-            self._metric_card(metrics, label, self.patreon_metric_vars[key]).pack(
-                side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
-            )
+        for index, (label, key) in enumerate([
+            ("TOTAL MEMBERS", "total"),
+            ("ACTIVE", "active"),
+            ("DECLINED", "declined"),
+            ("FORMER", "former"),
+        ]):
+            card = self._metric_card(self.patreon_tab, label, self.patreon_metric_vars[key], "", "accent")
+            card.grid(row=1, column=index, sticky="nsew", padx=(0, 12 if index < 3 else 0), pady=(0, 18))
 
-        panel = ttk.Frame(self.patreon_tab, style="Panel.TFrame", padding=10)
-        panel.pack(fill=tk.BOTH, expand=True)
-        table_wrap = ttk.Frame(panel, style="Panel.TFrame")
-        table_wrap.pack(fill=tk.BOTH, expand=True)
+        panel = self._card_frame(self.patreon_tab)
+        panel.grid(row=2, column=0, columnspan=4, sticky="nsew")
+        panel.rowconfigure(0, weight=1)
+        panel.columnconfigure(0, weight=1)
+        table_wrap = tk.Frame(panel, bg=self.palette["panel"])
+        table_wrap.grid(row=0, column=0, sticky="nsew")
         self.patreon_tree = ttk.Treeview(
             table_wrap,
             columns=[column for column, _, _ in PATREON_TABLE_COLUMNS],
@@ -582,12 +845,56 @@ class PatreonMemberApp(tk.Tk):
         x_scroll.grid(row=1, column=0, sticky="ew")
         table_wrap.columnconfigure(0, weight=1)
         table_wrap.rowconfigure(0, weight=1)
+        self._configure_tree_tags()
         self._load_existing_patreon_csv()
 
-    def _metric_card(self, parent: ttk.Frame, label: str, value_var: tk.StringVar) -> ttk.Frame:
-        frame = ttk.Frame(parent, style="Panel.TFrame", padding=14)
-        ttk.Label(frame, text=label, style="MetricTitle.TLabel").pack(anchor=tk.W)
-        ttk.Label(frame, textvariable=value_var, style="MetricValue.TLabel").pack(anchor=tk.W, pady=(6, 0))
+    def _card_frame(self, parent: tk.Frame) -> tk.Frame:
+        return tk.Frame(
+            parent,
+            bg=self.palette["panel"],
+            highlightbackground=self.palette["line"],
+            highlightthickness=1,
+        )
+
+    def _metric_card(
+        self,
+        parent: tk.Frame,
+        label: str,
+        value_var: tk.StringVar,
+        detail: str = "",
+        color_key: str = "accent",
+    ) -> tk.Frame:
+        frame = self._card_frame(parent)
+        frame.configure(height=128)
+        frame.pack_propagate(False)
+        tk.Label(
+            frame,
+            text=label,
+            bg=self.palette["panel"],
+            fg=self.palette["muted"],
+            font=("Segoe UI", 10, "bold"),
+        ).pack(anchor=tk.W, padx=22, pady=(20, 4))
+        row = tk.Frame(frame, bg=self.palette["panel"])
+        row.pack(fill=tk.X, padx=22)
+        tk.Label(
+            row,
+            textvariable=value_var,
+            bg=self.palette["panel"],
+            fg=self.palette["ink"],
+            font=("Segoe UI", 24, "bold"),
+        ).pack(side=tk.LEFT)
+        if detail:
+            tk.Label(
+                row,
+                text=f"  {detail}",
+                bg=self.palette["panel"],
+                fg=self.palette["success"] if detail.startswith("↑") else self.palette["ink"],
+                font=("Segoe UI", 11),
+            ).pack(side=tk.LEFT, pady=(8, 0))
+        bar = tk.Frame(frame, bg=self.palette["track"], height=5)
+        bar.pack(side=tk.BOTTOM, fill=tk.X, padx=22, pady=(0, 22))
+        fill = tk.Frame(bar, bg=self.palette.get(color_key, self.palette["accent"]), height=5)
+        fill.place(relx=0, rely=0, relwidth=0.08 if label.endswith("1") else 0.75 if label.endswith("2") else 0.02, relheight=1)
         return frame
 
     def toggle_theme(self) -> None:
@@ -608,7 +915,25 @@ class PatreonMemberApp(tk.Tk):
     def on_group_changed(self) -> None:
         self.app_settings["group_unit"] = self.group_var.get()
         save_app_settings(APP_SETTINGS_PATH, self.app_settings)
+        self._refresh_group_buttons()
         self._draw_period_chart(self.visible_rows)
+
+    def _select_group(self, group: str) -> None:
+        self.group_var.set(group)
+        self.on_group_changed()
+
+    def _refresh_group_buttons(self) -> None:
+        if not hasattr(self, "group_buttons"):
+            return
+        for group, button in self.group_buttons.items():
+            selected = group == self.group_var.get()
+            button.configure(
+                bg=self.palette["control_bg"] if selected else self.palette["panel_alt"],
+                fg=self.palette["ink"] if selected else self.palette["muted"],
+                activebackground=self.palette["select_bg"],
+                activeforeground=self.palette["ink"],
+                font=("Segoe UI", 10, "bold" if selected else "normal"),
+            )
 
     def select_insight_dimension(self, dimension: str) -> None:
         self.insight_dimension_var.set(dimension)
@@ -623,25 +948,78 @@ class PatreonMemberApp(tk.Tk):
         p = self.palette
         for dimension, button in self.dimension_buttons.items():
             selected = dimension == self.insight_dimension_var.get()
-            selected_bg = "#3b3b3d" if selected and self.dark_mode_var.get() else p["panel_alt"]
+            selected_bg = p["control_bg"] if selected else p["panel_alt"]
             normal_bg = p["panel"]
             button.configure(
                 bg=selected_bg if selected else normal_bg,
-                fg=p["ink"],
+                fg=p["ink"] if selected else p["muted"],
                 activebackground=selected_bg if selected else p["track"],
                 activeforeground=p["ink"],
-                relief=tk.SOLID,
-                borderwidth=1,
-                highlightthickness=1,
-                highlightbackground=p["line"],
-                highlightcolor=p["line"],
+                relief=tk.FLAT,
+                borderwidth=0,
+                highlightthickness=0,
             )
+
+    def _open_date_range_dialog(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Date Range")
+        dialog.geometry("420x300")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(bg=self.palette["content"])
+        frame = tk.Frame(dialog, bg=self.palette["panel"], highlightbackground=self.palette["line"], highlightthickness=1)
+        frame.pack(fill=tk.BOTH, expand=True, padx=18, pady=18)
+        tk.Label(frame, text="Date Range", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=22, pady=(20, 14))
+
+        form = tk.Frame(frame, bg=self.palette["panel"])
+        form.pack(fill=tk.X, padx=22)
+        tk.Label(form, text="Preset", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", pady=6)
+        range_box = ttk.Combobox(form, textvariable=self.range_var, values=RANGE_PRESETS, width=24, state="readonly")
+        range_box.grid(row=0, column=1, sticky="ew", padx=(12, 0), pady=6)
+        range_box.bind("<<ComboboxSelected>>", lambda _event: self.on_range_changed())
+        tk.Label(form, text="Start", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=6)
+        self.after_entry = ttk.Entry(form, textvariable=self.after_var, width=26)
+        self.after_entry.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=6)
+        tk.Label(form, text="End", bg=self.palette["panel"], fg=self.palette["muted"], font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w", pady=6)
+        self.before_entry = ttk.Entry(form, textvariable=self.before_var, width=26)
+        self.before_entry.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=6)
+        form.columnconfigure(1, weight=1)
+        self._apply_range_preset_to_entries()
+
+        buttons = tk.Frame(frame, bg=self.palette["panel"])
+        buttons.pack(fill=tk.X, padx=22, pady=(20, 0))
+        tk.Button(
+            buttons,
+            text="Apply",
+            command=lambda: (self.apply_filters(), dialog.destroy()),
+            bd=0,
+            bg=self.palette["primary_soft"],
+            fg="#082454",
+            padx=18,
+            pady=9,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(side=tk.RIGHT)
+        tk.Button(
+            buttons,
+            text="Cancel",
+            command=dialog.destroy,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            padx=18,
+            pady=9,
+            cursor="hand2",
+            font=("Segoe UI", 11),
+        ).pack(side=tk.RIGHT, padx=(0, 10))
 
     def _configure_tree_tags(self) -> None:
         if hasattr(self, "tree"):
             self.tree.tag_configure("needs_review", background=self.palette["table_review"], foreground=self.palette["ink"])
+            self.tree.tag_configure("alt", background=self.palette["row_alt"], foreground=self.palette["ink"])
         if hasattr(self, "patreon_tree"):
             self.patreon_tree.tag_configure("declined", background=self.palette["table_review"], foreground=self.palette["ink"])
+            self.patreon_tree.tag_configure("alt", background=self.palette["row_alt"], foreground=self.palette["ink"])
 
     def _load_existing_csv(self) -> None:
         if not CSV_PATH.exists():
@@ -828,26 +1206,34 @@ class PatreonMemberApp(tk.Tk):
         rows = self._filtered_table_rows()
         for item in self.tree.get_children():
             self.tree.delete(item)
-        for row in rows:
-            tags = ("needs_review",) if not row.get("tier") or row.get("confidence") == "needs_review" else ()
+        for index, row in enumerate(rows):
+            tags = []
+            if index % 2:
+                tags.append("alt")
+            if not row.get("tier") or row.get("confidence") == "needs_review":
+                tags.append("needs_review")
             self.tree.insert(
                 "",
                 tk.END,
                 values=[self._table_value(row, column) for column, _, _ in TABLE_COLUMNS],
-                tags=tags,
+                tags=tuple(tags),
             )
         self.count_var.set(f"{len(rows)} rows")
 
     def _set_patreon_rows(self, rows: list[dict[str, str]]) -> None:
         for item in self.patreon_tree.get_children():
             self.patreon_tree.delete(item)
-        for row in rows:
-            tags = ("declined",) if row.get("patron_status") == "declined_patron" else ()
+        for index, row in enumerate(rows):
+            tags = []
+            if index % 2:
+                tags.append("alt")
+            if row.get("patron_status") == "declined_patron":
+                tags.append("declined")
             self.patreon_tree.insert(
                 "",
                 tk.END,
                 values=[row.get(column, "") for column, _, _ in PATREON_TABLE_COLUMNS],
-                tags=tags,
+                tags=tuple(tags),
             )
         counts = self._patreon_status_counts(rows)
         self.patreon_metric_vars["total"].set(str(len(rows)))
@@ -915,17 +1301,34 @@ class PatreonMemberApp(tk.Tk):
         ttk.Button(buttons, text="취소", command=dialog.destroy).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _filtered_table_rows(self) -> list[dict[str, str]]:
+        rows = self.visible_rows
+        search = self.search_var.get().strip().lower() if hasattr(self, "search_var") else ""
+        if search:
+            rows = [
+                row
+                for row in rows
+                if search in row.get("member_name", "").lower()
+                or search in row.get("member_email", "").lower()
+                or search in row.get("subject", "").lower()
+            ]
         selected = self.tier_filter_var.get()
-        if selected == "전체":
-            return self.visible_rows
-        if selected == "확인필요":
-            return [row for row in self.visible_rows if not row.get("tier")]
-        tier = selected.replace("티어 ", "")
-        return [row for row in self.visible_rows if row.get("tier") == tier]
+        if selected not in {"전체", "All Tiers"}:
+            if selected in {"확인필요", "Needs Check"}:
+                rows = [row for row in rows if not row.get("tier")]
+            else:
+                tier = selected.replace("티어 ", "").replace("Tier ", "")
+                rows = [row for row in rows if row.get("tier") == tier]
+        status = self.status_filter_var.get() if hasattr(self, "status_filter_var") else "Status: All"
+        if status not in {"Status: All", "전체"}:
+            if status == "Needs Check":
+                rows = [row for row in rows if not row.get("tier") or row.get("confidence") == "needs_review"]
+            else:
+                rows = [row for row in rows if self._payment_status_label(row) == status]
+        return rows
 
     def _table_value(self, row: dict[str, str], column: str) -> str:
         if column == "event_type":
-            return "신규 회원"
+            return "New Pledge"
         if column == "membership_tier":
             return self._membership_tier_label(row)
         if column == "billing_cycle":
@@ -939,30 +1342,30 @@ class PatreonMemberApp(tk.Tk):
     def _membership_tier_label(self, row: dict[str, str]) -> str:
         tier = row.get("tier", "")
         if tier in {"1", "2", "3", "4"}:
-            return f"티어 {tier}"
-        return "확인필요"
+            return f"Tier {tier}"
+        return "Needs Check"
 
     def _billing_cycle_label(self, row: dict[str, str]) -> str:
         subject = row.get("subject", "").lower()
         if "annual" in subject or "yearly" in subject or "연간" in subject:
-            return "연간"
-        return "월간"
+            return "Annual"
+        return "Monthly"
 
     def _payment_status_label(self, row: dict[str, str]) -> str:
         text = f"{row.get('subject', '')} {row.get('match_method', '')} {row.get('confidence', '')}".lower()
         if "gift" in text or "선물" in text:
             if "self" in text or "본인" in text:
-                return "선물 (본인)"
-            return "선물 (타인)"
+                return "Gift (Self)"
+            return "Gift (Other)"
         if row.get("confidence") == "needs_review":
-            return "결제 완료 (재시도)"
-        return "유료 (활성 상태)"
+            return "Payment Completed"
+        return "Active Paid"
 
     def _conversion_path_label(self, row: dict[str, str]) -> str:
         sender = row.get("from", "").lower()
         if "patreon" in sender:
-            return "메일"
-        return "기타"
+            return "Gmail"
+        return "Other"
 
     def _draw_tier_chart(self, rows: list[dict[str, str]]) -> None:
         chart = self.tier_chart
@@ -971,35 +1374,37 @@ class PatreonMemberApp(tk.Tk):
         chart.delete("all")
         counts = self._tier_counts(rows)
         data = [
-            ("티어 1", counts["1"], p[TIER_COLORS["1"]]),
-            ("티어 2", counts["2"], p[TIER_COLORS["2"]]),
-            ("티어 3", counts["3"], p[TIER_COLORS["3"]]),
-            ("티어 4", counts["4"], p[TIER_COLORS["4"]]),
-            ("확인필요", counts["needs_review"], p[TIER_COLORS["needs_review"]]),
+            ("Tier 1", counts["1"], p[TIER_COLORS["1"]]),
+            ("Tier 2", counts["2"], p[TIER_COLORS["2"]]),
+            ("Tier 3", counts["3"], p[TIER_COLORS["3"]]),
+            ("Tier 4", counts["4"], p[TIER_COLORS["4"]]),
         ]
+        data.sort(key=lambda item: item[1], reverse=True)
         width = max(chart.winfo_width(), 420)
+        height = max(chart.winfo_height(), 300)
         max_count = max([count for _, count, _ in data] + [1])
-        left = 110
+        left = 140
         right_pad = 70
         bar_w = max(160, width - left - right_pad)
-        top = 34
-        row_h = 56
+        top = 28
+        row_h = max(52, min(70, (height - 44) // max(1, len(data))))
+        chart.create_line(0, 0, width, 0, fill=p["line"])
         for index, (label, count, color) in enumerate(data):
             y = top + index * row_h
             fill_width = int(bar_w * (count / max_count)) if max_count else 0
-            chart.create_text(18, y + 12, text=label, anchor=tk.W, fill=p["ink"], font=("Malgun Gothic", 10))
-            chart.create_rectangle(left, y, left + bar_w, y + 24, fill=p["track"], outline="")
+            chart.create_text(0, y + 17, text=label, anchor=tk.W, fill=p["ink"], font=("Segoe UI", 11))
+            chart.create_rectangle(left, y, left + bar_w, y + 34, fill=p["track"], outline="")
             if count:
-                chart.create_rectangle(left, y, left + max(fill_width, 3), y + 24, fill=color, outline="")
-            chart.create_text(left + bar_w + 14, y + 12, text=str(count), anchor=tk.W, fill=p["muted"], font=("Malgun Gothic", 10))
+                chart.create_rectangle(left, y, left + max(fill_width, 5), y + 34, fill=color, outline="")
+            chart.create_text(left + bar_w + 18, y + 17, text=str(count), anchor=tk.W, fill=p["ink"], font=("Segoe UI", 13, "bold"))
         if not rows:
             chart.create_text(
                 width / 2,
-                320,
+                height / 2,
                 text="표시할 데이터가 없습니다.",
                 anchor=tk.CENTER,
                 fill=p["muted"],
-                font=("Malgun Gothic", 10),
+                font=("Segoe UI", 10),
             )
 
     def _draw_period_chart(self, rows: list[dict[str, str]]) -> None:
@@ -1130,50 +1535,50 @@ class PatreonMemberApp(tk.Tk):
 
     def _insight_series(self) -> list[tuple[str, str, str]]:
         dimension = self.insight_dimension_var.get()
-        if dimension == "멤버십 등급":
+        if dimension in {"멤버십 등급", "Membership Tier"}:
             return [
-                ("tier_1", "티어 1", SERIES_COLORS[0]),
-                ("tier_2", "티어 2", SERIES_COLORS[1]),
-                ("tier_3", "티어 3", SERIES_COLORS[2]),
-                ("tier_4", "티어 4", SERIES_COLORS[3]),
-                ("tier_review", "확인필요", SERIES_COLORS[4]),
+                ("tier_1", "Tier 1", SERIES_COLORS[1]),
+                ("tier_2", "Tier 2", SERIES_COLORS[0]),
+                ("tier_3", "Tier 3", SERIES_COLORS[2]),
+                ("tier_4", "Tier 4", SERIES_COLORS[3]),
+                ("tier_review", "Needs Check", SERIES_COLORS[4]),
             ]
-        if dimension == "청구 주기":
+        if dimension in {"청구 주기", "Billing Cycle"}:
             return [
-                ("monthly", "월간", SERIES_COLORS[0]),
-                ("annual", "연간", SERIES_COLORS[1]),
+                ("monthly", "Monthly", SERIES_COLORS[0]),
+                ("annual", "Annual", SERIES_COLORS[1]),
             ]
-        if dimension == "결제 상태":
+        if dimension in {"결제 상태", "Payment Status"}:
             return [
-                ("paid_active", "유료 (활성 상태)", SERIES_COLORS[0]),
-                ("retry_complete", "결제 완료 (재시도)", SERIES_COLORS[1]),
-                ("gift_other", "선물 (타인)", SERIES_COLORS[2]),
-                ("gift_self", "선물 (본인)", SERIES_COLORS[3]),
+                ("paid_active", "Active Paid", SERIES_COLORS[0]),
+                ("retry_complete", "Payment Completed", SERIES_COLORS[1]),
+                ("gift_other", "Gift (Other)", SERIES_COLORS[2]),
+                ("gift_self", "Gift (Self)", SERIES_COLORS[3]),
             ]
-        if dimension == "유료로 전환하는 경로":
+        if dimension in {"유료로 전환하는 경로", "Paid Path"}:
             return [
-                ("email", "메일", SERIES_COLORS[0]),
-                ("other_path", "기타", SERIES_COLORS[1]),
+                ("email", "Gmail", SERIES_COLORS[0]),
+                ("other_path", "Other", SERIES_COLORS[1]),
             ]
-        return [("new_member", "신규 회원", SERIES_COLORS[0])]
+        return [("new_member", "New Members", SERIES_COLORS[0])]
 
     def _series_key_for_row(self, row: dict[str, str], dimension: str) -> str:
-        if dimension == "멤버십 등급":
+        if dimension in {"멤버십 등급", "Membership Tier"}:
             tier = row.get("tier", "")
             return f"tier_{tier}" if tier in {"1", "2", "3", "4"} else "tier_review"
-        if dimension == "청구 주기":
-            return "annual" if self._billing_cycle_label(row) == "연간" else "monthly"
-        if dimension == "결제 상태":
+        if dimension in {"청구 주기", "Billing Cycle"}:
+            return "annual" if self._billing_cycle_label(row) == "Annual" else "monthly"
+        if dimension in {"결제 상태", "Payment Status"}:
             status = self._payment_status_label(row)
-            if status == "결제 완료 (재시도)":
+            if status == "Payment Completed":
                 return "retry_complete"
-            if status == "선물 (타인)":
+            if status == "Gift (Other)":
                 return "gift_other"
-            if status == "선물 (본인)":
+            if status == "Gift (Self)":
                 return "gift_self"
             return "paid_active"
-        if dimension == "유료로 전환하는 경로":
-            return "email" if self._conversion_path_label(row) == "메일" else "other_path"
+        if dimension in {"유료로 전환하는 경로", "Paid Path"}:
+            return "email" if self._conversion_path_label(row) == "Gmail" else "other_path"
         return "new_member"
 
     def _bucket_bounds(self, rows: list[dict[str, str]]) -> tuple[dt.date | None, dt.date | None]:
@@ -1186,7 +1591,7 @@ class PatreonMemberApp(tk.Tk):
 
     def _bucket_labels_between(self, start: dt.date, end: dt.date, group: str) -> list[tuple[str, dt.date]]:
         labels: list[tuple[str, dt.date]] = []
-        if group == "매일":
+        if group in {"매일", "Daily"}:
             if (end - start).days > 400:
                 start = end - dt.timedelta(days=400)
             current = start
@@ -1194,7 +1599,7 @@ class PatreonMemberApp(tk.Tk):
                 labels.append(self._bucket_label(current, group))
                 current += dt.timedelta(days=1)
             return labels
-        if group == "매주":
+        if group in {"매주", "Weekly"}:
             year, week, _weekday = start.isocalendar()
             current = dt.date.fromisocalendar(year, week, 1)
             while current <= end:
@@ -1211,9 +1616,9 @@ class PatreonMemberApp(tk.Tk):
         return labels
 
     def _bucket_label(self, row_date: dt.date, group: str) -> tuple[str, dt.date]:
-        if group == "매일":
+        if group in {"매일", "Daily"}:
             return row_date.strftime("%m. %d."), row_date
-        if group == "매주":
+        if group in {"매주", "Weekly"}:
             year, week, _weekday = row_date.isocalendar()
             key_date = dt.date.fromisocalendar(year, week, 1)
             return key_date.strftime("%m. %d."), key_date
@@ -1266,9 +1671,17 @@ class PatreonMemberApp(tk.Tk):
             self.before_var.set("" if end is None else end.strftime("%Y/%m/%d"))
         state = tk.NORMAL if preset == "사용자 지정" else "readonly"
         if hasattr(self, "after_entry"):
-            self.after_entry.configure(state=state)
+            try:
+                if self.after_entry.winfo_exists():
+                    self.after_entry.configure(state=state)
+            except tk.TclError:
+                pass
         if hasattr(self, "before_entry"):
-            self.before_entry.configure(state=state)
+            try:
+                if self.before_entry.winfo_exists():
+                    self.before_entry.configure(state=state)
+            except tk.TclError:
+                pass
 
     def _range_dates(self, preset: str) -> tuple[dt.date | None | str, dt.date | None | str]:
         today = dt.date.today()
