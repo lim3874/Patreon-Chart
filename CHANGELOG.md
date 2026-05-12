@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.1 - 2026-05-12
+
+### Fixed
+
+- Widen the sidebar header area so the Korean `크리에이터 분석` title no longer clips on high-DPI displays.
+- Use Malgun Gothic for the Korean sidebar title and subtitle.
+- Reduce header padding around the sidebar logo to give the Korean title more usable width.
+
 ## 2.2.0 - 2026-05-12
 
 ### Added

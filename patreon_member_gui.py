@@ -412,7 +412,7 @@ class PatreonMemberApp(tk.Tk):
         shell.pack(fill=tk.BOTH, expand=True)
         self.root_frame = shell
 
-        self.sidebar = tk.Frame(shell, bg=p["sidebar"], width=320)
+        self.sidebar = tk.Frame(shell, bg=p["sidebar"], width=380)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar.pack_propagate(False)
 
@@ -448,29 +448,32 @@ class PatreonMemberApp(tk.Tk):
     def _build_sidebar(self) -> None:
         p = self.palette
         top = tk.Frame(self.sidebar, bg=p["sidebar"])
-        top.pack(fill=tk.X, padx=32, pady=(28, 36))
+        top.pack(fill=tk.X, padx=24, pady=(28, 36))
 
         avatar = tk.Canvas(top, width=56, height=56, bg=p["sidebar"], highlightthickness=0)
-        avatar.pack(side=tk.LEFT, padx=(0, 16), anchor=tk.N)
+        avatar.pack(side=tk.LEFT, padx=(0, 14), anchor=tk.N)
         self._draw_sidebar_logo(avatar)
 
         title_box = tk.Frame(top, bg=p["sidebar"])
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        tk.Label(
+        self.sidebar_title_label = tk.Label(
             title_box,
             text="크리에이터\n분석",
             bg=p["sidebar"],
             fg=p["primary_soft"],
             justify=tk.LEFT,
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor=tk.W)
-        tk.Label(
+            wraplength=260,
+            font=("Malgun Gothic", 16, "bold"),
+        )
+        self.sidebar_title_label.pack(anchor=tk.W)
+        self.sidebar_subtitle_label = tk.Label(
             title_box,
             text="멤버십 현황",
             bg=p["sidebar"],
             fg=p["muted"],
-            font=("Segoe UI", 10),
-        ).pack(anchor=tk.W, pady=(2, 0))
+            font=("Malgun Gothic", 10),
+        )
+        self.sidebar_subtitle_label.pack(anchor=tk.W, pady=(2, 0))
 
         self.nav_buttons: dict[str, tk.Button] = {}
         nav = tk.Frame(self.sidebar, bg=p["sidebar"])
