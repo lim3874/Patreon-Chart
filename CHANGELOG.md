@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.1 - 2026-05-12
+
+### Fixed
+
+- Enable Windows per-monitor DPI awareness before Tk creates the app window so text is rendered sharply on 4K/high-DPI displays.
+- Apply Tk font scaling from the active monitor DPI instead of relying on Windows bitmap scaling.
+- Replace the taskbar icon with a high-contrast v3 chart icon that includes explicit 16, 24, 32, 48, 64, 128, and 256 px frames.
+- Update the app icon references to use the new high-DPI icon asset.
+
 ## 2.1.0 - 2026-05-12
 
 ### Added

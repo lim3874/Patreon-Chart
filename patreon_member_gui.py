@@ -46,8 +46,9 @@ PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 ASSETS_DIR = APP_DIR / "assets"
-APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v2.ico"
-APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v2.png"
+APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v3.ico"
+APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v3.png"
+_WINDOWS_PROCESS_CONFIGURED = False
 
 TABLE_COLUMNS = [
     ("event_type", "CATEGORY", 130),
@@ -150,7 +151,9 @@ SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa
 
 class PatreonMemberApp(tk.Tk):
     def __init__(self) -> None:
+        configure_windows_process()
         super().__init__()
+        self._configure_dpi_scaling()
         self.title("Patreon Gmail Member Exporter")
         self._icon_image: tk.PhotoImage | None = None
         self._apply_window_icon()
@@ -614,6 +617,16 @@ class PatreonMemberApp(tk.Tk):
                 self.iconphoto(True, self._icon_image)
             except tk.TclError:
                 self._icon_image = None
+
+    def _configure_dpi_scaling(self) -> None:
+        if sys.platform != "win32":
+            return
+        try:
+            pixels_per_inch = float(self.winfo_fpixels("1i"))
+            if pixels_per_inch > 0:
+                self.tk.call("tk", "scaling", pixels_per_inch / 72.0)
+        except tk.TclError:
+            pass
 
     def _build_summary_tab(self) -> None:
         for column in range(3):
@@ -1790,10 +1803,43 @@ class PatreonMemberApp(tk.Tk):
 
 
 def main() -> int:
-    set_windows_app_id()
+    configure_windows_process()
     app = PatreonMemberApp()
     app.mainloop()
     return 0
+
+
+def configure_windows_process() -> None:
+    global _WINDOWS_PROCESS_CONFIGURED
+    if _WINDOWS_PROCESS_CONFIGURED:
+        return
+    set_windows_dpi_awareness()
+    set_windows_app_id()
+    _WINDOWS_PROCESS_CONFIGURED = True
+
+
+def set_windows_dpi_awareness() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        try:
+            if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                return
+        except Exception:
+            pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            return
+        except Exception:
+            pass
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def set_windows_app_id() -> None:
