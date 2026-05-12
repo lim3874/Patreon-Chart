@@ -46,8 +46,8 @@ PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 ASSETS_DIR = APP_DIR / "assets"
-APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v3.ico"
-APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v3.png"
+APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v4.ico"
+APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v4.png"
 _WINDOWS_PROCESS_CONFIGURED = False
 
 TABLE_COLUMNS = [
@@ -409,7 +409,7 @@ class PatreonMemberApp(tk.Tk):
         shell.pack(fill=tk.BOTH, expand=True)
         self.root_frame = shell
 
-        self.sidebar = tk.Frame(shell, bg=p["sidebar"], width=256)
+        self.sidebar = tk.Frame(shell, bg=p["sidebar"], width=320)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar.pack_propagate(False)
 
@@ -445,12 +445,11 @@ class PatreonMemberApp(tk.Tk):
     def _build_sidebar(self) -> None:
         p = self.palette
         top = tk.Frame(self.sidebar, bg=p["sidebar"])
-        top.pack(fill=tk.X, padx=24, pady=(28, 36))
+        top.pack(fill=tk.X, padx=32, pady=(28, 36))
 
-        avatar = tk.Canvas(top, width=44, height=44, bg=p["sidebar"], highlightthickness=0)
-        avatar.pack(side=tk.LEFT, padx=(0, 14))
-        avatar.create_oval(3, 3, 41, 41, fill=p["panel_alt"], outline=p["line"], width=1)
-        avatar.create_text(22, 22, text="CA", fill=p["primary_soft"], font=("Segoe UI", 10, "bold"))
+        avatar = tk.Canvas(top, width=56, height=56, bg=p["sidebar"], highlightthickness=0)
+        avatar.pack(side=tk.LEFT, padx=(0, 16), anchor=tk.N)
+        self._draw_sidebar_logo(avatar)
 
         title_box = tk.Frame(top, bg=p["sidebar"])
         title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -460,7 +459,7 @@ class PatreonMemberApp(tk.Tk):
             bg=p["sidebar"],
             fg=p["primary_soft"],
             justify=tk.LEFT,
-            font=("Segoe UI", 20, "bold"),
+            font=("Segoe UI", 18, "bold"),
         ).pack(anchor=tk.W)
         tk.Label(
             title_box,
@@ -474,10 +473,10 @@ class PatreonMemberApp(tk.Tk):
         nav = tk.Frame(self.sidebar, bg=p["sidebar"])
         nav.pack(fill=tk.X, padx=16)
         for key, icon, label in [
-            ("summary", "▦", "Summary"),
-            ("period", "▣", "Period"),
-            ("list", "☷", "List"),
-            ("patreon", "◆", "Patreon API"),
+            ("summary", "[]", "Summary"),
+            ("period", "##", "Period"),
+            ("list", "==", "List"),
+            ("patreon", "<>", "Patreon API"),
         ]:
             self.nav_buttons[key] = self._nav_button(nav, key, icon, label)
 
@@ -486,7 +485,7 @@ class PatreonMemberApp(tk.Tk):
         tk.Frame(bottom, bg=p["line"], height=1).pack(fill=tk.X, pady=(0, 24))
         tk.Button(
             bottom,
-            text="Results Folder  →",
+            text="Results Folder  ->",
             command=self.open_output_folder,
             bd=0,
             bg=p["primary_soft"],
@@ -498,6 +497,18 @@ class PatreonMemberApp(tk.Tk):
             cursor="hand2",
             font=("Segoe UI", 12, "bold"),
         ).pack(fill=tk.X)
+
+    def _draw_sidebar_logo(self, canvas: tk.Canvas) -> None:
+        p = self.palette
+        canvas.create_oval(3, 3, 53, 53, fill=p["panel_alt"], outline=p["line"], width=1)
+        canvas.create_line(17, 16, 17, 41, 42, 41, fill=p["primary_soft"], width=3)
+        for x0, y0, x1, color in [
+            (21, 30, 26, p["primary"]),
+            (29, 24, 34, p["accent_3"]),
+            (37, 18, 42, p["accent_4"]),
+        ]:
+            canvas.create_rectangle(x0, y0, x1, 40, fill=color, outline="")
+        canvas.create_line(20, 31, 29, 25, 36, 29, 43, 18, fill=p["ink"], width=2)
 
     def _nav_button(self, parent: tk.Frame, key: str, icon: str, label: str) -> tk.Button:
         p = self.palette

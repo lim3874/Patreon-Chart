@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.2 - 2026-05-12
+
+### Fixed
+
+- Replace the dark tile app icon with a cleaner transparent chart mark for the title bar and taskbar.
+- Replace the sidebar `CA` placeholder with a small chart logo.
+- Widen the sidebar and reduce the sidebar title size so `Creator Analytics` no longer clips on high-DPI displays.
+
 ## 2.1.1 - 2026-05-12
 
 ### Fixed
