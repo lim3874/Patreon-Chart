@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.11.0 - 2026-05-15
+
+### Added
+
+- Replace the top-bar settings icon behavior with an in-app settings dialog instead of opening `config.json` in Notepad.
+- Add settings tabs for Gmail search query, tier USD prices, local currency price maps, fallback exchange rates, excluded emails, Patreon settings shortcuts, Discord bot token, and Discord server ID.
+- Keep an advanced `config.json` editor shortcut inside the settings dialog for manual troubleshooting.
+
+### Changed
+
+- Discord bot token and server ID can now be saved from the main settings dialog as well as the Discord-specific dialog.
+
 ## 2.10.0 - 2026-05-15
 
 ### Added

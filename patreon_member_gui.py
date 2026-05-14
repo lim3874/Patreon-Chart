@@ -2626,6 +2626,217 @@ class PatreonMemberApp(tk.Tk):
             messagebox.showinfo("파일 없음", "아직 Patreon API CSV가 없습니다.")
 
     def open_config(self) -> None:
+        self.open_settings()
+
+    def open_settings(self) -> None:
+        try:
+            config = load_config(CONFIG_PATH)
+        except Exception as exc:
+            messagebox.showerror("설정 불러오기 실패", str(exc))
+            return
+        try:
+            discord_credentials = load_discord_credentials(DISCORD_CREDENTIALS_PATH)
+        except DiscordApiError:
+            discord_credentials = DiscordCredentials("", "")
+
+        dialog = tk.Toplevel(self)
+        dialog.title("설정")
+        dialog.geometry("920x720")
+        dialog.minsize(780, 600)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(bg=self.palette["bg"])
+        self._apply_window_chrome(dialog)
+
+        root = ttk.Frame(dialog, padding=18)
+        root.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(root, text="설정", style="Title.TLabel").pack(anchor=tk.W, pady=(0, 14))
+
+        notebook = ttk.Notebook(root)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        general_tab = ttk.Frame(notebook, padding=18)
+        tiers_tab = ttk.Frame(notebook, padding=18)
+        integrations_tab = ttk.Frame(notebook, padding=18)
+        notebook.add(general_tab, text="일반")
+        notebook.add(tiers_tab, text="티어 / 통화")
+        notebook.add(integrations_tab, text="연동")
+
+        def section(parent: tk.Widget, title: str, description: str = "") -> ttk.Frame:
+            box = ttk.Frame(parent, style="Subtle.TFrame", padding=14)
+            box.pack(fill=tk.X, pady=(0, 14))
+            ttk.Label(box, text=title, style="Panel.TLabel", font=("Malgun Gothic", 12, "bold")).pack(anchor=tk.W)
+            if description:
+                ttk.Label(box, text=description, style="PanelMuted.TLabel", wraplength=780).pack(anchor=tk.W, pady=(4, 10))
+            return box
+
+        def labeled_entry(parent: tk.Widget, label: str, var: tk.StringVar, *, show: str = "", width: int = 60) -> ttk.Entry:
+            row = ttk.Frame(parent)
+            row.pack(fill=tk.X, pady=5)
+            ttk.Label(row, text=label, width=18).pack(side=tk.LEFT)
+            entry = ttk.Entry(row, textvariable=var, show=show, width=width)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            return entry
+
+        def text_widget(parent: tk.Widget, height: int, *, wrap: str = tk.WORD) -> tk.Text:
+            widget = tk.Text(
+                parent,
+                height=height,
+                wrap=wrap,
+                bg=self.palette["control_bg"],
+                fg=self.palette["ink"],
+                insertbackground=self.palette["ink"],
+                selectbackground=self.palette["select_bg"],
+                selectforeground=self.palette["select_fg"],
+                relief=tk.SOLID,
+                bd=1,
+                highlightthickness=1,
+                highlightbackground=self.palette["line"],
+                highlightcolor=self.palette["line"],
+                font=("Consolas", 10),
+            )
+            widget.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+            return widget
+
+        gmail_box = section(
+            general_tab,
+            "Gmail 검색식",
+            "Patreon 신규 가입 메일을 찾을 때 사용하는 Gmail 검색어입니다.",
+        )
+        gmail_query_text = text_widget(gmail_box, 4)
+        gmail_query_text.insert("1.0", str(config.get("gmail_query", "")))
+
+        general_options = section(general_tab, "기본 옵션")
+        max_error_var = tk.StringVar(value=str(config.get("max_relative_tier_error", "0.35")))
+        labeled_entry(general_options, "티어 허용 오차", max_error_var, width=20)
+        ttk.Label(
+            general_options,
+            text="예: 0.35는 환율 추정 시 목표 티어 금액과 약 35% 이내면 같은 티어로 판단합니다.",
+            style="PanelMuted.TLabel",
+            wraplength=760,
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        excluded_box = section(general_tab, "제외 이메일", "집계에서 제외할 이메일을 한 줄에 하나씩 입력합니다.")
+        excluded_text = text_widget(excluded_box, 5)
+        excluded_text.insert("1.0", "\n".join(str(item) for item in config.get("excluded_emails", [])))
+
+        tier_box = section(tiers_tab, "USD 기준 티어")
+        tier_vars = {
+            str(index): tk.StringVar(value=str(config.get("tiers_usd", {}).get(str(index), "")))
+            for index in range(1, 5)
+        }
+        for index in range(1, 5):
+            labeled_entry(tier_box, f"티어 {index}", tier_vars[str(index)], width=20)
+
+        local_box = section(
+            tiers_tab,
+            "지역가 매핑",
+            "통화별 실제 결제 금액을 티어 번호에 직접 매핑합니다. JSON 형식으로 저장됩니다.",
+        )
+        local_price_text = text_widget(local_box, 10, wrap=tk.NONE)
+        local_price_text.insert(
+            "1.0",
+            json.dumps(config.get("local_price_map", {}), ensure_ascii=False, indent=2),
+        )
+
+        fallback_box = section(
+            tiers_tab,
+            "보조 환율",
+            "온라인 환율 조회가 실패할 때 사용할 USD 환산율입니다. JSON 형식으로 저장됩니다.",
+        )
+        fallback_text = text_widget(fallback_box, 8, wrap=tk.NONE)
+        fallback_text.insert(
+            "1.0",
+            json.dumps(config.get("fallback_rates_to_usd", {}), ensure_ascii=False, indent=2),
+        )
+
+        patreon_box = section(
+            integrations_tab,
+            "Patreon API",
+            "Patreon 현재 멤버, 결제 상태, 티어, 후원 히스토리를 가져오는 API 키를 관리합니다.",
+        )
+        ttk.Button(patreon_box, text="Patreon API 키 설정", command=self.open_patreon_settings).pack(anchor=tk.W, pady=(4, 0))
+
+        discord_box = section(
+            integrations_tab,
+            "Discord 봇",
+            "Patreon의 Discord 사용자 ID를 서버 닉네임, 사용자명, 역할로 변환할 때 사용합니다.",
+        )
+        discord_token_var = tk.StringVar(value=discord_credentials.bot_token)
+        discord_guild_var = tk.StringVar(value=discord_credentials.guild_id)
+        labeled_entry(discord_box, "봇 토큰", discord_token_var, show="*", width=70)
+        labeled_entry(discord_box, "서버 ID", discord_guild_var, width=70)
+        ttk.Label(
+            discord_box,
+            text="Developer Portal > Bot > Privileged Gateway Intents에서 Server Members Intent를 켜야 합니다.",
+            style="PanelMuted.TLabel",
+            wraplength=760,
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        file_box = section(integrations_tab, "파일")
+        file_actions = ttk.Frame(file_box)
+        file_actions.pack(fill=tk.X, pady=(4, 0))
+        ttk.Button(file_actions, text="결과 폴더 열기", command=self.open_output_folder).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(file_actions, text="config.json 고급 편집", command=self.open_config_file).pack(side=tk.LEFT)
+
+        def parse_json_object(label: str, raw: str) -> dict[str, object]:
+            try:
+                value = json.loads(raw.strip() or "{}")
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{label} JSON 형식이 올바르지 않습니다: {exc}") from exc
+            if not isinstance(value, dict):
+                raise ValueError(f"{label}은 JSON 객체여야 합니다.")
+            return value
+
+        def save() -> None:
+            try:
+                new_config = dict(config)
+                gmail_query = gmail_query_text.get("1.0", tk.END).strip()
+                if not gmail_query:
+                    raise ValueError("Gmail 검색식을 입력해야 합니다.")
+                tiers = {key: value.get().strip() for key, value in tier_vars.items()}
+                if any(not value for value in tiers.values()):
+                    raise ValueError("티어 1-4의 USD 기준 금액을 모두 입력해야 합니다.")
+                new_config["gmail_query"] = gmail_query
+                new_config["tiers_usd"] = tiers
+                new_config["max_relative_tier_error"] = max_error_var.get().strip() or "0.35"
+                new_config["excluded_emails"] = [
+                    line.strip()
+                    for line in excluded_text.get("1.0", tk.END).replace(",", "\n").splitlines()
+                    if line.strip()
+                ]
+                new_config["local_price_map"] = parse_json_object("지역가 매핑", local_price_text.get("1.0", tk.END))
+                new_config["fallback_rates_to_usd"] = parse_json_object("보조 환율", fallback_text.get("1.0", tk.END))
+
+                discord_token = discord_token_var.get().strip()
+                discord_guild = discord_guild_var.get().strip()
+                if bool(discord_token) != bool(discord_guild):
+                    raise ValueError("Discord 봇 토큰과 서버 ID는 함께 입력하거나 둘 다 비워야 합니다.")
+
+                CONFIG_PATH.write_text(
+                    json.dumps(new_config, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                if discord_token and discord_guild:
+                    save_discord_credentials(
+                        DISCORD_CREDENTIALS_PATH,
+                        DiscordCredentials(bot_token=discord_token, guild_id=discord_guild),
+                    )
+                elif DISCORD_CREDENTIALS_PATH.exists():
+                    DISCORD_CREDENTIALS_PATH.unlink()
+                self.status_var.set("설정을 저장했습니다.")
+                self.patreon_status_var.set("설정을 저장했습니다.")
+            except Exception as exc:
+                messagebox.showerror("설정 저장 실패", str(exc))
+                return
+            dialog.destroy()
+
+        buttons = ttk.Frame(root)
+        buttons.pack(fill=tk.X, pady=(16, 0))
+        ttk.Button(buttons, text="저장", style="Accent.TButton", command=save).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="취소", command=dialog.destroy).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def open_config_file(self) -> None:
         if not CONFIG_PATH.exists():
             load_config(CONFIG_PATH)
         subprocess.Popen(["notepad", str(CONFIG_PATH)])

@@ -62,6 +62,7 @@ Copy-Item config.example.json config.json
 - `List`의 `Status: Rejoined` 필터로 취소 후 재구독했을 가능성이 있는 회원만 확인
 - `Patreon API`에서 Patreon의 현재 멤버 상태/티어/결제 상태 가져오기
 - `Import from Gmail`로 메일 재조회
+- 상단 설정 아이콘에서 Gmail 검색식, 티어 가격, 지역가, 보조 환율, 제외 이메일, Discord 봇 설정 관리
 
 명령줄로 파일만 뽑으려면:
 
