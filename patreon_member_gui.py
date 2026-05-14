@@ -233,6 +233,8 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_sort_column: str | None = None
         self.patreon_sort_descending = False
         self.patreon_heading_drag: dict[str, object] | None = None
+        self.patreon_drag_ghost: tk.Toplevel | None = None
+        self.patreon_drag_ghost_label: tk.Label | None = None
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.app_settings["dark_mode"] = True
@@ -1917,6 +1919,7 @@ class PatreonMemberApp(tk.Tk):
         return None
 
     def _on_patreon_heading_press(self, event: tk.Event) -> None:
+        self._hide_patreon_drag_ghost()
         region = self.patreon_tree.identify_region(event.x, event.y)
         if region == "separator":
             self.patreon_heading_drag = None
@@ -1929,29 +1932,86 @@ class PatreonMemberApp(tk.Tk):
             self.patreon_heading_drag = None
             return
         self.patreon_heading_drag = {"column": column, "x": event.x, "y": event.y, "dragged": False}
-        self.after(220, self._run_patreon_heading_click, column)
 
     def _run_patreon_heading_click(self, column: str) -> None:
         drag = self.patreon_heading_drag
         if not drag or drag.get("column") != column or drag.get("dragged"):
             return
         self.patreon_heading_drag = None
+        self._hide_patreon_drag_ghost()
         self._sort_patreon_by_column(column)
+
+    def _show_patreon_drag_ghost(self, column: str, event: tk.Event) -> None:
+        label_text = self._patreon_column_labels().get(column, column)
+        if not self.patreon_drag_ghost:
+            ghost = tk.Toplevel(self)
+            ghost.overrideredirect(True)
+            ghost.configure(bg=self.palette["select_bg"])
+            try:
+                ghost.attributes("-topmost", True)
+                ghost.attributes("-alpha", 0.94)
+            except tk.TclError:
+                pass
+            label = tk.Label(
+                ghost,
+                text=label_text,
+                bg=self.palette["select_bg"],
+                fg=self.palette["select_fg"],
+                bd=1,
+                relief=tk.SOLID,
+                highlightthickness=1,
+                highlightbackground=self.palette["primary_soft"],
+                font=("Malgun Gothic", 10, "bold"),
+                padx=12,
+                pady=6,
+            )
+            label.pack()
+            self.patreon_drag_ghost = ghost
+            self.patreon_drag_ghost_label = label
+        elif self.patreon_drag_ghost_label:
+            self.patreon_drag_ghost_label.configure(text=label_text)
+        self._move_patreon_drag_ghost(event)
+
+    def _move_patreon_drag_ghost(self, event: tk.Event) -> None:
+        if not self.patreon_drag_ghost:
+            return
+        x_root = getattr(event, "x_root", self.winfo_pointerx())
+        y_root = getattr(event, "y_root", self.winfo_pointery())
+        self.patreon_drag_ghost.geometry(f"+{int(x_root) + 12}+{int(y_root) + 12}")
+
+    def _hide_patreon_drag_ghost(self) -> None:
+        if self.patreon_drag_ghost:
+            try:
+                self.patreon_drag_ghost.destroy()
+            except tk.TclError:
+                pass
+        self.patreon_drag_ghost = None
+        self.patreon_drag_ghost_label = None
 
     def _on_patreon_heading_motion(self, event: tk.Event) -> None:
         if not self.patreon_heading_drag:
+            return
+        if self.patreon_heading_drag.get("dragged"):
+            self._move_patreon_drag_ghost(event)
             return
         start_x = int(self.patreon_heading_drag.get("x", event.x))
         start_y = int(self.patreon_heading_drag.get("y", event.y))
         if abs(event.x - start_x) > 8 and abs(event.x - start_x) > abs(event.y - start_y):
             self.patreon_heading_drag["dragged"] = True
             self.patreon_tree.configure(cursor="sb_h_double_arrow")
+            self._show_patreon_drag_ghost(str(self.patreon_heading_drag.get("column", "")), event)
 
     def _on_patreon_heading_release(self, event: tk.Event) -> str | None:
         drag = self.patreon_heading_drag
         self.patreon_heading_drag = None
         self.patreon_tree.configure(cursor="")
-        if not drag or not drag.get("dragged"):
+        self._hide_patreon_drag_ghost()
+        if not drag:
+            return None
+        if not drag.get("dragged"):
+            source = str(drag.get("column", ""))
+            if source:
+                self._sort_patreon_by_column(source)
             return None
         source = str(drag.get("column", ""))
         target = self._visible_patreon_column_from_event(event)

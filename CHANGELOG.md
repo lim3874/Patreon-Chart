@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.13.0 - 2026-05-15
+
+### Added
+
+- Add an Excel-like floating preview while dragging Patreon API table column headers.
+
+### Changed
+
+- Patreon API column header clicks now sort on release, so a held click can still become a drag without triggering an early sort.
+- Column drag cleanup now clears the floating preview on drop or cancel.
+
 ## 2.12.1 - 2026-05-15
 
 ### Changed
