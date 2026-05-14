@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.13.5 - 2026-05-15
+
+### Fixed
+
+- Reduce restore flicker for the custom Windows title bar by re-enabling borderless chrome while the app is still minimized instead of after the window becomes visible again.
+- Hide any active Patreon column drag preview before minimizing the app.
+
 ## 2.13.4 - 2026-05-15
 
 ### Fixed

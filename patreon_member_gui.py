@@ -218,6 +218,8 @@ class PatreonMemberApp(tk.Tk):
         self._custom_maximized = False
         self._normal_geometry = ""
         self._drag_state: tuple[int, int, int, int] | None = None
+        self._custom_chrome_restore_after_id: str | None = None
+        self._custom_chrome_restore_pending = False
         if self.custom_chrome:
             self.overrideredirect(True)
 
@@ -605,14 +607,22 @@ class PatreonMemberApp(tk.Tk):
         if not self.custom_chrome:
             self.iconify()
             return
+        self._hide_patreon_drag_ghost()
+        if self._custom_chrome_restore_after_id:
+            try:
+                self.after_cancel(self._custom_chrome_restore_after_id)
+            except tk.TclError:
+                pass
+            self._custom_chrome_restore_after_id = None
+        self._custom_chrome_restore_pending = True
         self.overrideredirect(False)
+        self.update_idletasks()
         self.iconify()
-        self.after(250, self._restore_custom_chrome_after_map)
+        self._custom_chrome_restore_after_id = self.after(30, self._restore_custom_chrome_after_map)
 
     def _restore_custom_chrome_after_map(self) -> None:
-        if self.state() == "iconic":
-            self.after(250, self._restore_custom_chrome_after_map)
-            return
+        self._custom_chrome_restore_after_id = None
+        self._custom_chrome_restore_pending = False
         self.overrideredirect(True)
         self._show_custom_chrome_in_taskbar()
 
