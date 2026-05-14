@@ -1977,7 +1977,12 @@ class PatreonMemberApp(tk.Tk):
             return
         x_root = getattr(event, "x_root", self.winfo_pointerx())
         y_root = getattr(event, "y_root", self.winfo_pointery())
-        self.patreon_drag_ghost.geometry(f"+{int(x_root) + 12}+{int(y_root) + 12}")
+        self.patreon_drag_ghost.update_idletasks()
+        width = max(1, self.patreon_drag_ghost.winfo_reqwidth())
+        height = max(1, self.patreon_drag_ghost.winfo_reqheight())
+        x = int(x_root) - (width // 2)
+        y = int(y_root) - (height // 2)
+        self.patreon_drag_ghost.geometry(f"+{x}+{y}")
 
     def _hide_patreon_drag_ghost(self) -> None:
         if self.patreon_drag_ghost:

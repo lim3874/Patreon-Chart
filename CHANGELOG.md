@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.13.1 - 2026-05-15
+
+### Fixed
+
+- Center the Patreon API column drag preview directly under the mouse cursor instead of offsetting it to the lower right.
+
 ## 2.13.0 - 2026-05-15
 
 ### Added
