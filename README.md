@@ -61,6 +61,7 @@ Copy-Item config.example.json config.json
 - `List`에서 이름/이메일 검색, 티어 필터, 상태 필터가 포함된 표 확인
 - `List`의 `Status: Rejoined` 필터로 취소 후 재구독했을 가능성이 있는 회원만 확인
 - `Patreon API`에서 Patreon의 현재 멤버 상태/티어/결제 상태 가져오기
+- `Patreon API` 표에서 헤더를 드래그해 컬럼 순서 변경, `표 컬럼 설정`으로 표시 항목 선택
 - `Import from Gmail`로 메일 재조회
 - 상단 설정 아이콘에서 Gmail 검색식, 티어 가격, 지역가, 보조 환율, 제외 이메일, Discord 봇 설정 관리
 

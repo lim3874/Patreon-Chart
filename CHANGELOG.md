@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.12.0 - 2026-05-15
+
+### Added
+
+- Add persistent Patreon API table column ordering.
+- Add header drag-and-drop reordering for Patreon API table columns.
+- Add a Patreon table column settings dialog for choosing which columns are visible and changing their order with controls.
+- Add a Patreon table column settings shortcut in the Patreon API workspace and main settings dialog.
+
+### Changed
+
+- Patreon API table row rendering now keeps the full internal column set while using Treeview display columns for user-controlled visibility and order.
+
 ## 2.11.0 - 2026-05-15
 
 ### Added

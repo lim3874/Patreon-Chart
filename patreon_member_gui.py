@@ -232,9 +232,17 @@ class PatreonMemberApp(tk.Tk):
         self.loading_context: str | None = None
         self.patreon_sort_column: str | None = None
         self.patreon_sort_descending = False
+        self.patreon_heading_drag: dict[str, object] | None = None
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.app_settings["dark_mode"] = True
+        self.patreon_column_order = self._normalize_patreon_column_order(
+            self.app_settings.get("patreon_column_order")
+        )
+        self.patreon_visible_columns = self._normalize_patreon_visible_columns(
+            self.app_settings.get("patreon_visible_columns"),
+            self.patreon_column_order,
+        )
         self.dark_mode_var = tk.BooleanVar(value=True)
         self.range_var = tk.StringVar(value=str(self.app_settings.get("range_preset", "지난 30일")))
         if self.range_var.get() in RANGE_PRESET_ALIASES:
@@ -463,6 +471,44 @@ class PatreonMemberApp(tk.Tk):
                 darkcolor=p["line"],
             )
         self._apply_window_chrome()
+
+    def _patreon_column_ids(self) -> list[str]:
+        return [column for column, _label, _width in PATREON_TABLE_COLUMNS]
+
+    def _patreon_column_labels(self) -> dict[str, str]:
+        return {column: label for column, label, _width in PATREON_TABLE_COLUMNS}
+
+    def _normalize_patreon_column_order(self, raw: object) -> list[str]:
+        columns = self._patreon_column_ids()
+        if isinstance(raw, list):
+            order = [str(column) for column in raw if str(column) in columns]
+        else:
+            order = []
+        order.extend(column for column in columns if column not in order)
+        return order
+
+    def _normalize_patreon_visible_columns(self, raw: object, order: list[str]) -> list[str]:
+        columns = set(self._patreon_column_ids())
+        if isinstance(raw, list):
+            visible = [column for column in order if column in columns and column in {str(item) for item in raw}]
+        else:
+            visible = [column for column in order if column in columns]
+        return visible or [order[0]]
+
+    def _patreon_display_columns(self) -> list[str]:
+        visible = set(self.patreon_visible_columns)
+        return [column for column in self.patreon_column_order if column in visible]
+
+    def _apply_patreon_display_columns(self) -> None:
+        if not hasattr(self, "patreon_tree"):
+            return
+        self.patreon_tree.configure(displaycolumns=self._patreon_display_columns())
+        self._refresh_patreon_headings()
+
+    def _save_patreon_column_settings(self) -> None:
+        self.app_settings["patreon_column_order"] = list(self.patreon_column_order)
+        self.app_settings["patreon_visible_columns"] = list(self.patreon_visible_columns)
+        save_app_settings(APP_SETTINGS_PATH, self.app_settings)
 
     def _apply_window_chrome(self, window: tk.Tk | tk.Toplevel | None = None) -> None:
         target = window or self
@@ -1104,6 +1150,18 @@ class PatreonMemberApp(tk.Tk):
             pady=10,
             cursor="hand2",
             font=("Segoe UI", 11, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        tk.Button(
+            toolbar,
+            text="표 컬럼 설정",
+            command=self.open_patreon_column_settings,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
         ).pack(side=tk.LEFT)
         tk.Label(
             toolbar,
@@ -1133,14 +1191,18 @@ class PatreonMemberApp(tk.Tk):
             columns=[column for column, _, _ in PATREON_TABLE_COLUMNS],
             show="headings",
             selectmode="browse",
+            displaycolumns=self._patreon_display_columns(),
         )
         for column, label, width in PATREON_TABLE_COLUMNS:
             self.patreon_tree.heading(
                 column,
                 text=label,
-                command=lambda selected=column: self._sort_patreon_by_column(selected),
+                command="",
             )
             self.patreon_tree.column(column, width=width, minwidth=70, anchor=tk.W)
+        self.patreon_tree.bind("<ButtonPress-1>", self._on_patreon_heading_press, add="+")
+        self.patreon_tree.bind("<B1-Motion>", self._on_patreon_heading_motion, add="+")
+        self.patreon_tree.bind("<ButtonRelease-1>", self._on_patreon_heading_release, add="+")
         y_scroll = ttk.Scrollbar(table_wrap, orient=tk.VERTICAL, command=self.patreon_tree.yview)
         x_scroll = ttk.Scrollbar(table_wrap, orient=tk.HORIZONTAL, command=self.patreon_tree.xview)
         self.patreon_tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
@@ -1853,6 +1915,74 @@ class PatreonMemberApp(tk.Tk):
             )
         self.count_var.set(f"{len(rows)}명")
 
+    def _visible_patreon_column_from_event(self, event: tk.Event) -> str | None:
+        raw_column = self.patreon_tree.identify_column(event.x)
+        if not raw_column.startswith("#"):
+            return None
+        try:
+            index = int(raw_column[1:]) - 1
+        except ValueError:
+            return None
+        columns = self._patreon_display_columns()
+        if 0 <= index < len(columns):
+            return columns[index]
+        return None
+
+    def _on_patreon_heading_press(self, event: tk.Event) -> None:
+        region = self.patreon_tree.identify_region(event.x, event.y)
+        if region == "separator":
+            self.patreon_heading_drag = None
+            return
+        if region != "heading":
+            self.patreon_heading_drag = None
+            return
+        column = self._visible_patreon_column_from_event(event)
+        if not column:
+            self.patreon_heading_drag = None
+            return
+        self.patreon_heading_drag = {"column": column, "x": event.x, "y": event.y, "dragged": False}
+        self.after(220, self._run_patreon_heading_click, column)
+
+    def _run_patreon_heading_click(self, column: str) -> None:
+        drag = self.patreon_heading_drag
+        if not drag or drag.get("column") != column or drag.get("dragged"):
+            return
+        self.patreon_heading_drag = None
+        self._sort_patreon_by_column(column)
+
+    def _on_patreon_heading_motion(self, event: tk.Event) -> None:
+        if not self.patreon_heading_drag:
+            return
+        start_x = int(self.patreon_heading_drag.get("x", event.x))
+        start_y = int(self.patreon_heading_drag.get("y", event.y))
+        if abs(event.x - start_x) > 8 and abs(event.x - start_x) > abs(event.y - start_y):
+            self.patreon_heading_drag["dragged"] = True
+            self.patreon_tree.configure(cursor="sb_h_double_arrow")
+
+    def _on_patreon_heading_release(self, event: tk.Event) -> str | None:
+        drag = self.patreon_heading_drag
+        self.patreon_heading_drag = None
+        self.patreon_tree.configure(cursor="")
+        if not drag or not drag.get("dragged"):
+            return None
+        source = str(drag.get("column", ""))
+        target = self._visible_patreon_column_from_event(event)
+        if not source or not target or source == target:
+            return "break"
+        self._move_patreon_column(source, target)
+        return "break"
+
+    def _move_patreon_column(self, source: str, target: str) -> None:
+        if source not in self.patreon_column_order or target not in self.patreon_column_order:
+            return
+        order = [column for column in self.patreon_column_order if column != source]
+        target_index = order.index(target)
+        order.insert(target_index, source)
+        self.patreon_column_order = order
+        self._save_patreon_column_settings()
+        self._apply_patreon_display_columns()
+        self.status_var.set("Patreon 표 컬럼 순서를 저장했습니다.")
+
     def _set_patreon_rows(self, rows: list[dict[str, str]]) -> None:
         self._refresh_patreon_headings()
         display_rows = self._sorted_patreon_rows(rows)
@@ -1867,7 +1997,7 @@ class PatreonMemberApp(tk.Tk):
             self.patreon_tree.insert(
                 "",
                 tk.END,
-                values=[self._patreon_table_value(row, column) for column, _, _ in PATREON_TABLE_COLUMNS],
+                values=[self._patreon_table_value(row, column) for column in self._patreon_column_ids()],
                 tags=tuple(tags),
             )
         counts = self._patreon_status_counts(rows)
@@ -1877,6 +2007,8 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_metric_vars["former"].set(str(counts["former_patron"]))
 
     def _sort_patreon_by_column(self, column: str) -> None:
+        if self.patreon_heading_drag and self.patreon_heading_drag.get("dragged"):
+            return
         if self.patreon_sort_column == column:
             self.patreon_sort_descending = not self.patreon_sort_descending
         else:
@@ -1893,7 +2025,7 @@ class PatreonMemberApp(tk.Tk):
             self.patreon_tree.heading(
                 column,
                 text=text,
-                command=lambda selected=column: self._sort_patreon_by_column(selected),
+                command="",
             )
 
     def _sorted_patreon_rows(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -2154,6 +2286,141 @@ class PatreonMemberApp(tk.Tk):
 
         buttons = ttk.Frame(frame)
         buttons.pack(fill=tk.X, pady=(18, 0))
+        ttk.Button(buttons, text="저장", style="Accent.TButton", command=save).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="취소", command=dialog.destroy).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def open_patreon_column_settings(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Patreon 표 컬럼 설정")
+        dialog.geometry("760x680")
+        dialog.minsize(620, 520)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(bg=self.palette["bg"])
+        self._apply_window_chrome(dialog)
+
+        root = ttk.Frame(dialog, padding=18)
+        root.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(root, text="표 컬럼 설정", style="Title.TLabel").pack(anchor=tk.W, pady=(0, 8))
+        ttk.Label(
+            root,
+            text="체크한 항목만 Patreon API 표에 표시됩니다. 위/아래 버튼으로 순서를 바꿀 수 있고, 표 헤더를 직접 드래그해도 순서가 저장됩니다.",
+            style="Muted.TLabel",
+            wraplength=700,
+        ).pack(anchor=tk.W, pady=(0, 14))
+
+        body = ttk.Frame(root)
+        body.pack(fill=tk.BOTH, expand=True)
+        list_frame = ttk.Frame(body, style="Subtle.TFrame", padding=8)
+        list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        action_frame = ttk.Frame(body)
+        action_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(12, 0))
+
+        labels = self._patreon_column_labels()
+        listbox = tk.Listbox(
+            list_frame,
+            selectmode=tk.SINGLE,
+            exportselection=False,
+            bg=self.palette["control_bg"],
+            fg=self.palette["ink"],
+            selectbackground=self.palette["select_bg"],
+            selectforeground=self.palette["select_fg"],
+            relief=tk.FLAT,
+            highlightthickness=0,
+            font=("Malgun Gothic", 11),
+        )
+        scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
+        listbox.configure(yscrollcommand=scroll.set)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.LEFT, fill=tk.Y)
+
+        working_order = list(self.patreon_column_order)
+        working_visible = set(self.patreon_visible_columns)
+
+        def row_text(column: str) -> str:
+            mark = "☑" if column in working_visible else "☐"
+            return f"{mark}  {labels.get(column, column)}"
+
+        def refresh_list(selection: int | None = None) -> None:
+            current = listbox.curselection()
+            if selection is None and current:
+                selection = current[0]
+            listbox.delete(0, tk.END)
+            for column in working_order:
+                listbox.insert(tk.END, row_text(column))
+            if working_order:
+                index = min(selection if selection is not None else 0, len(working_order) - 1)
+                listbox.selection_set(index)
+                listbox.activate(index)
+                listbox.see(index)
+
+        def selected_index() -> int | None:
+            selected = listbox.curselection()
+            return selected[0] if selected else None
+
+        def toggle_selected() -> None:
+            index = selected_index()
+            if index is None:
+                return
+            column = working_order[index]
+            if column in working_visible:
+                if len(working_visible) <= 1:
+                    messagebox.showwarning("표시 항목 필요", "최소 1개 컬럼은 표시해야 합니다.")
+                    return
+                working_visible.remove(column)
+            else:
+                working_visible.add(column)
+            refresh_list(index)
+
+        def move_selected(delta: int) -> None:
+            index = selected_index()
+            if index is None:
+                return
+            new_index = index + delta
+            if new_index < 0 or new_index >= len(working_order):
+                return
+            working_order[index], working_order[new_index] = working_order[new_index], working_order[index]
+            refresh_list(new_index)
+
+        def show_all() -> None:
+            working_visible.clear()
+            working_visible.update(working_order)
+            refresh_list()
+
+        def reset_defaults() -> None:
+            working_order[:] = self._patreon_column_ids()
+            working_visible.clear()
+            working_visible.update(working_order)
+            refresh_list(0)
+
+        listbox.bind("<Double-Button-1>", lambda _event: toggle_selected())
+        listbox.bind("<space>", lambda _event: (toggle_selected(), "break"))
+        refresh_list(0)
+
+        ttk.Button(action_frame, text="표시/숨김", command=toggle_selected).pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(action_frame, text="위로", command=lambda: move_selected(-1)).pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(action_frame, text="아래로", command=lambda: move_selected(1)).pack(fill=tk.X, pady=(0, 16))
+        ttk.Button(action_frame, text="전체 표시", command=show_all).pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(action_frame, text="기본값", command=reset_defaults).pack(fill=tk.X)
+
+        def save() -> None:
+            if not working_visible:
+                messagebox.showwarning("표시 항목 필요", "최소 1개 컬럼은 표시해야 합니다.")
+                return
+            self.patreon_column_order = self._normalize_patreon_column_order(working_order)
+            self.patreon_visible_columns = [
+                column for column in self.patreon_column_order if column in working_visible
+            ] or [self.patreon_column_order[0]]
+            if self.patreon_sort_column and self.patreon_sort_column not in self.patreon_visible_columns:
+                self.patreon_sort_column = None
+                self.patreon_sort_descending = False
+            self._save_patreon_column_settings()
+            self._apply_patreon_display_columns()
+            self._set_patreon_rows(self.patreon_rows)
+            dialog.destroy()
+
+        buttons = ttk.Frame(root)
+        buttons.pack(fill=tk.X, pady=(16, 0))
         ttk.Button(buttons, text="저장", style="Accent.TButton", command=save).pack(side=tk.RIGHT)
         ttk.Button(buttons, text="취소", command=dialog.destroy).pack(side=tk.RIGHT, padx=(0, 8))
 
@@ -2755,7 +3022,10 @@ class PatreonMemberApp(tk.Tk):
             "Patreon API",
             "Patreon 현재 멤버, 결제 상태, 티어, 후원 히스토리를 가져오는 API 키를 관리합니다.",
         )
-        ttk.Button(patreon_box, text="Patreon API 키 설정", command=self.open_patreon_settings).pack(anchor=tk.W, pady=(4, 0))
+        patreon_actions = ttk.Frame(patreon_box)
+        patreon_actions.pack(anchor=tk.W, pady=(4, 0))
+        ttk.Button(patreon_actions, text="Patreon API 키 설정", command=self.open_patreon_settings).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(patreon_actions, text="Patreon 표 컬럼 설정", command=self.open_patreon_column_settings).pack(side=tk.LEFT)
 
         discord_box = section(
             integrations_tab,
