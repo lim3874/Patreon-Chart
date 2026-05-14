@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.7.2 - 2026-05-14
+
+### Fixed
+
+- Apply Windows dark title bar styling to the actual decorated window frame instead of the Tk client area.
+- Reapply title bar styling shortly after window creation so the main window and dialogs keep dark chrome after they are realized.
+
 ## 2.7.1 - 2026-05-14
 
 ### Fixed

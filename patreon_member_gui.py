@@ -417,7 +417,15 @@ class PatreonMemberApp(tk.Tk):
         target = window or self
         palette = dict(self.palette)
         dark_mode = bool(self.dark_mode_var.get())
-        target.after_idle(lambda: set_windows_window_theme(target, dark_mode, palette))
+        def apply_theme() -> None:
+            try:
+                if target.winfo_exists():
+                    set_windows_window_theme(target, dark_mode, palette)
+            except tk.TclError:
+                pass
+
+        target.after_idle(apply_theme)
+        target.after(250, apply_theme)
 
     def _build_ui(self) -> None:
         p = self.palette
@@ -2268,33 +2276,82 @@ def set_windows_app_id() -> None:
         pass
 
 
-def set_windows_window_theme(window: tk.Tk | tk.Toplevel, dark_mode: bool, palette: dict[str, str]) -> None:
+def set_windows_window_theme(window: tk.Tk | tk.Toplevel, dark_mode: bool, palette: dict[str, str]) -> int:
     if sys.platform != "win32":
-        return
+        return 0
     try:
         import ctypes
 
-        hwnd = int(window.winfo_id())
+        handles = get_windows_toplevel_handles(window, ctypes)
         enabled = ctypes.c_int(1 if dark_mode else 0)
-        for attribute in (20, 19):
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                ctypes.c_void_p(hwnd),
-                ctypes.c_int(attribute),
-                ctypes.byref(enabled),
-                ctypes.sizeof(enabled),
-            )
         caption_color = ctypes.c_int(hex_to_colorref(palette.get("topbar", palette.get("bg", "#ffffff"))))
         text_color = ctypes.c_int(hex_to_colorref(palette.get("ink", "#000000")))
         border_color = ctypes.c_int(hex_to_colorref(palette.get("line", "#000000")))
-        for attribute, value in ((35, caption_color), (36, text_color), (34, border_color)):
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                ctypes.c_void_p(hwnd),
-                ctypes.c_int(attribute),
-                ctypes.byref(value),
-                ctypes.sizeof(value),
-            )
+        applied = 0
+        for hwnd in handles:
+            hwnd_arg = ctypes.c_void_p(hwnd)
+            for attribute in (20, 19):
+                result = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd_arg,
+                    ctypes.c_int(attribute),
+                    ctypes.byref(enabled),
+                    ctypes.sizeof(enabled),
+                )
+                if result == 0:
+                    applied += 1
+            for attribute, value in ((35, caption_color), (36, text_color), (34, border_color)):
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd_arg,
+                    ctypes.c_int(attribute),
+                    ctypes.byref(value),
+                    ctypes.sizeof(value),
+                )
+            redraw_windows_frame(hwnd, ctypes)
+        return applied
     except Exception:
+        return 0
+
+
+def get_windows_toplevel_handles(window: tk.Tk | tk.Toplevel, ctypes_module: object) -> list[int]:
+    handles: list[int] = []
+
+    def add_handle(value: object) -> None:
+        try:
+            hwnd = int(value)
+        except (TypeError, ValueError):
+            try:
+                hwnd = int(str(value), 0)
+            except (TypeError, ValueError):
+                return
+        if hwnd and hwnd not in handles:
+            handles.append(hwnd)
+
+    add_handle(window.winfo_id())
+    try:
+        add_handle(window.tk.call("wm", "frame", window._w))
+    except tk.TclError:
         pass
+
+    user32 = ctypes_module.windll.user32
+    for hwnd in tuple(handles):
+        add_handle(user32.GetParent(hwnd))
+        add_handle(user32.GetAncestor(hwnd, 2))
+
+    return handles
+
+
+def redraw_windows_frame(hwnd: int, ctypes_module: object) -> None:
+    user32 = ctypes_module.windll.user32
+    hwnd_arg = ctypes_module.c_void_p(hwnd)
+    swp_nomove = 0x0002
+    swp_nosize = 0x0001
+    swp_nozorder = 0x0004
+    swp_framechanged = 0x0020
+    rdw_invalidate = 0x0001
+    rdw_updatenow = 0x0100
+    rdw_frame = 0x0400
+    user32.SetWindowPos(hwnd_arg, None, 0, 0, 0, 0, swp_nomove | swp_nosize | swp_nozorder | swp_framechanged)
+    user32.RedrawWindow(hwnd_arg, None, None, rdw_invalidate | rdw_updatenow | rdw_frame)
 
 
 def hex_to_colorref(value: str) -> int:
