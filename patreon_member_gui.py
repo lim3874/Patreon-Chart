@@ -233,8 +233,8 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_sort_column: str | None = None
         self.patreon_sort_descending = False
         self.patreon_heading_drag: dict[str, object] | None = None
-        self.patreon_drag_ghost: tk.Toplevel | None = None
-        self.patreon_drag_ghost_label: tk.Label | None = None
+        self.patreon_drag_ghost: tk.Label | None = None
+        self.patreon_drag_ghost_size: tuple[int, int] = (1, 1)
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
         self.app_settings["dark_mode"] = True
@@ -1944,16 +1944,8 @@ class PatreonMemberApp(tk.Tk):
     def _show_patreon_drag_ghost(self, column: str, event: tk.Event) -> None:
         label_text = self._patreon_column_labels().get(column, column)
         if not self.patreon_drag_ghost:
-            ghost = tk.Toplevel(self)
-            ghost.overrideredirect(True)
-            ghost.configure(bg=self.palette["select_bg"])
-            try:
-                ghost.attributes("-topmost", True)
-                ghost.attributes("-alpha", 0.94)
-            except tk.TclError:
-                pass
-            label = tk.Label(
-                ghost,
+            self.patreon_drag_ghost = tk.Label(
+                self,
                 text=label_text,
                 bg=self.palette["select_bg"],
                 fg=self.palette["select_fg"],
@@ -1965,11 +1957,14 @@ class PatreonMemberApp(tk.Tk):
                 padx=12,
                 pady=6,
             )
-            label.pack()
-            self.patreon_drag_ghost = ghost
-            self.patreon_drag_ghost_label = label
-        elif self.patreon_drag_ghost_label:
-            self.patreon_drag_ghost_label.configure(text=label_text)
+        else:
+            self.patreon_drag_ghost.configure(text=label_text)
+        self.patreon_drag_ghost.update_idletasks()
+        self.patreon_drag_ghost_size = (
+            max(1, self.patreon_drag_ghost.winfo_reqwidth()),
+            max(1, self.patreon_drag_ghost.winfo_reqheight()),
+        )
+        self.patreon_drag_ghost.lift()
         self._move_patreon_drag_ghost(event)
 
     def _move_patreon_drag_ghost(self, event: tk.Event) -> None:
@@ -1977,12 +1972,11 @@ class PatreonMemberApp(tk.Tk):
             return
         x_root = getattr(event, "x_root", self.winfo_pointerx())
         y_root = getattr(event, "y_root", self.winfo_pointery())
-        self.patreon_drag_ghost.update_idletasks()
-        width = max(1, self.patreon_drag_ghost.winfo_reqwidth())
-        height = max(1, self.patreon_drag_ghost.winfo_reqheight())
-        x = int(x_root) - (width // 2)
-        y = int(y_root) - (height // 2)
-        self.patreon_drag_ghost.geometry(f"+{x}+{y}")
+        width, height = self.patreon_drag_ghost_size
+        x = int(x_root) - self.winfo_rootx() - (width // 2)
+        y = int(y_root) - self.winfo_rooty() - (height // 2)
+        self.patreon_drag_ghost.place_configure(x=x, y=y)
+        self.patreon_drag_ghost.lift()
 
     def _hide_patreon_drag_ghost(self) -> None:
         if self.patreon_drag_ghost:
@@ -1991,7 +1985,7 @@ class PatreonMemberApp(tk.Tk):
             except tk.TclError:
                 pass
         self.patreon_drag_ghost = None
-        self.patreon_drag_ghost_label = None
+        self.patreon_drag_ghost_size = (1, 1)
 
     def _on_patreon_heading_motion(self, event: tk.Event) -> None:
         if not self.patreon_heading_drag:

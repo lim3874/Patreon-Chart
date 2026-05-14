@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.13.2 - 2026-05-15
+
+### Fixed
+
+- Make Patreon API column drag previews smoother by using a lightweight in-app overlay instead of moving a separate popup window on every mouse event.
+
 ## 2.13.1 - 2026-05-15
 
 ### Fixed
