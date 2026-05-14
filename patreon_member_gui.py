@@ -411,6 +411,13 @@ class PatreonMemberApp(tk.Tk):
                 lightcolor=p["line"],
                 darkcolor=p["line"],
             )
+        self._apply_window_chrome()
+
+    def _apply_window_chrome(self, window: tk.Tk | tk.Toplevel | None = None) -> None:
+        target = window or self
+        palette = dict(self.palette)
+        dark_mode = bool(self.dark_mode_var.get())
+        target.after_idle(lambda: set_windows_window_theme(target, dark_mode, palette))
 
     def _build_ui(self) -> None:
         p = self.palette
@@ -1080,6 +1087,7 @@ class PatreonMemberApp(tk.Tk):
         dialog.transient(self)
         dialog.grab_set()
         dialog.configure(bg=self.palette["content"])
+        self._apply_window_chrome(dialog)
         frame = tk.Frame(dialog, bg=self.palette["panel"], highlightbackground=self.palette["line"], highlightthickness=1)
         frame.pack(fill=tk.BOTH, expand=True, padx=18, pady=18)
         tk.Label(frame, text="기간 설정", bg=self.palette["panel"], fg=self.palette["ink"], font=("Segoe UI", 18, "bold")).pack(anchor=tk.W, padx=22, pady=(20, 14))
@@ -1168,6 +1176,7 @@ class PatreonMemberApp(tk.Tk):
         popup.transient(self)
         popup.grab_set()
         popup.configure(bg=self.palette["panel"])
+        self._apply_window_chrome(popup)
 
         header = tk.Frame(popup, bg=self.palette["panel"])
         header.pack(fill=tk.X, padx=16, pady=(16, 8))
@@ -1690,6 +1699,7 @@ class PatreonMemberApp(tk.Tk):
         dialog.transient(self)
         dialog.grab_set()
         dialog.configure(bg=self.palette["bg"])
+        self._apply_window_chrome(dialog)
         frame = ttk.Frame(dialog, padding=18)
         frame.pack(fill=tk.BOTH, expand=True)
 
@@ -2256,6 +2266,45 @@ def set_windows_app_id() -> None:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("lim3874.PatreonChart.MemberExporter")
     except Exception:
         pass
+
+
+def set_windows_window_theme(window: tk.Tk | tk.Toplevel, dark_mode: bool, palette: dict[str, str]) -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        hwnd = int(window.winfo_id())
+        enabled = ctypes.c_int(1 if dark_mode else 0)
+        for attribute in (20, 19):
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd),
+                ctypes.c_int(attribute),
+                ctypes.byref(enabled),
+                ctypes.sizeof(enabled),
+            )
+        caption_color = ctypes.c_int(hex_to_colorref(palette.get("topbar", palette.get("bg", "#ffffff"))))
+        text_color = ctypes.c_int(hex_to_colorref(palette.get("ink", "#000000")))
+        border_color = ctypes.c_int(hex_to_colorref(palette.get("line", "#000000")))
+        for attribute, value in ((35, caption_color), (36, text_color), (34, border_color)):
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd),
+                ctypes.c_int(attribute),
+                ctypes.byref(value),
+                ctypes.sizeof(value),
+            )
+    except Exception:
+        pass
+
+
+def hex_to_colorref(value: str) -> int:
+    color = value.strip().lstrip("#")
+    if len(color) != 6:
+        return 0
+    red = int(color[0:2], 16)
+    green = int(color[2:4], 16)
+    blue = int(color[4:6], 16)
+    return red | (green << 8) | (blue << 16)
 
 
 def add_months(value: dt.date, months: int) -> dt.date:

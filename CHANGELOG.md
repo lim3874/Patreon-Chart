@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.7.1 - 2026-05-14
+
+### Fixed
+
+- Apply Windows dark title bar styling to the main window when dark mode is enabled.
+- Apply the same title bar styling to app-owned dialogs such as date range, calendar, and Patreon API settings.
+
 ## 2.7.0 - 2026-05-12
 
 ### Added
