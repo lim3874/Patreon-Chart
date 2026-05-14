@@ -233,12 +233,11 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_sort_column: str | None = None
         self.patreon_sort_descending = False
         self.patreon_heading_drag: dict[str, object] | None = None
-        self.patreon_drag_ghost: tk.Label | None = None
+        self.patreon_drag_ghost: tk.Toplevel | None = None
+        self.patreon_drag_ghost_label: tk.Label | None = None
         self.patreon_drag_ghost_size: tuple[int, int] = (1, 1)
         self.patreon_drag_ghost_text = ""
         self.patreon_drag_ghost_size_cache: dict[str, tuple[int, int]] = {}
-        self.patreon_drag_ghost_target: tuple[int, int] | None = None
-        self.patreon_drag_ghost_after_id: str | None = None
         self.patreon_drag_ghost_position: tuple[int, int] | None = None
 
         self.app_settings = load_app_settings(APP_SETTINGS_PATH)
@@ -1949,8 +1948,17 @@ class PatreonMemberApp(tk.Tk):
     def _show_patreon_drag_ghost(self, column: str, event: tk.Event) -> None:
         label_text = self._patreon_column_labels().get(column, column)
         if not self.patreon_drag_ghost:
-            self.patreon_drag_ghost = tk.Label(
-                self,
+            ghost = tk.Toplevel(self)
+            ghost.withdraw()
+            ghost.overrideredirect(True)
+            ghost.configure(bg=self.palette["select_bg"])
+            try:
+                ghost.attributes("-topmost", True)
+                ghost.attributes("-alpha", 0.92)
+            except tk.TclError:
+                pass
+            self.patreon_drag_ghost_label = tk.Label(
+                ghost,
                 text=label_text,
                 bg=self.palette["select_bg"],
                 fg=self.palette["select_fg"],
@@ -1962,64 +1970,55 @@ class PatreonMemberApp(tk.Tk):
                 padx=12,
                 pady=6,
             )
+            self.patreon_drag_ghost_label.pack()
+            self.patreon_drag_ghost = ghost
         else:
-            self.patreon_drag_ghost.configure(
-                bg=self.palette["select_bg"],
-                fg=self.palette["select_fg"],
-                highlightbackground=self.palette["primary_soft"],
-            )
-        if self.patreon_drag_ghost_text != label_text:
-            self.patreon_drag_ghost.configure(text=label_text)
+            self.patreon_drag_ghost.configure(bg=self.palette["select_bg"])
+            if self.patreon_drag_ghost_label:
+                self.patreon_drag_ghost_label.configure(
+                    bg=self.palette["select_bg"],
+                    fg=self.palette["select_fg"],
+                    highlightbackground=self.palette["primary_soft"],
+                )
+        if self.patreon_drag_ghost_label and self.patreon_drag_ghost_text != label_text:
+            self.patreon_drag_ghost_label.configure(text=label_text)
             self.patreon_drag_ghost_text = label_text
         cached_size = self.patreon_drag_ghost_size_cache.get(label_text)
         if cached_size:
             self.patreon_drag_ghost_size = cached_size
-        else:
-            self.patreon_drag_ghost.update_idletasks()
+        elif self.patreon_drag_ghost_label:
+            self.patreon_drag_ghost_label.update_idletasks()
             self.patreon_drag_ghost_size = (
-                max(1, self.patreon_drag_ghost.winfo_reqwidth()),
-                max(1, self.patreon_drag_ghost.winfo_reqheight()),
+                max(1, self.patreon_drag_ghost_label.winfo_reqwidth()),
+                max(1, self.patreon_drag_ghost_label.winfo_reqheight()),
             )
             self.patreon_drag_ghost_size_cache[label_text] = self.patreon_drag_ghost_size
-        self.patreon_drag_ghost.lift()
-        self._move_patreon_drag_ghost(event, immediate=True)
+        self._move_patreon_drag_ghost(event)
+        try:
+            self.patreon_drag_ghost.deiconify()
+            self.patreon_drag_ghost.lift()
+        except tk.TclError:
+            pass
 
-    def _move_patreon_drag_ghost(self, event: tk.Event, immediate: bool = False) -> None:
+    def _move_patreon_drag_ghost(self, event: tk.Event) -> None:
         if not self.patreon_drag_ghost:
             return
-        x_root = getattr(event, "x_root", self.winfo_pointerx())
-        y_root = getattr(event, "y_root", self.winfo_pointery())
-        self.patreon_drag_ghost_target = (int(x_root), int(y_root))
-        if immediate:
-            self._flush_patreon_drag_ghost_move()
-        elif not self.patreon_drag_ghost_after_id:
-            self.patreon_drag_ghost_after_id = self.after_idle(self._flush_patreon_drag_ghost_move)
-
-    def _flush_patreon_drag_ghost_move(self) -> None:
-        self.patreon_drag_ghost_after_id = None
-        if not self.patreon_drag_ghost or not self.patreon_drag_ghost_target:
-            return
-        x_root, y_root = self.patreon_drag_ghost_target
+        x_root = int(getattr(event, "x_root", self.winfo_pointerx()))
+        y_root = int(getattr(event, "y_root", self.winfo_pointery()))
         width, height = self.patreon_drag_ghost_size
-        x = x_root - self.winfo_rootx() - (width // 2)
-        y = y_root - self.winfo_rooty() - (height // 2)
-        position = (x, y)
+        position = (x_root - (width // 2), y_root - (height // 2))
         if self.patreon_drag_ghost_position == position:
             return
-        self.patreon_drag_ghost.place_configure(x=x, y=y)
+        self.patreon_drag_ghost.geometry(f"+{position[0]}+{position[1]}")
         self.patreon_drag_ghost_position = position
 
     def _hide_patreon_drag_ghost(self) -> None:
-        if self.patreon_drag_ghost_after_id:
+        if self.patreon_drag_ghost:
             try:
-                self.after_cancel(self.patreon_drag_ghost_after_id)
+                self.patreon_drag_ghost.withdraw()
             except tk.TclError:
                 pass
-        if self.patreon_drag_ghost:
-            self.patreon_drag_ghost.place_forget()
         self.patreon_drag_ghost_size = (1, 1)
-        self.patreon_drag_ghost_target = None
-        self.patreon_drag_ghost_after_id = None
         self.patreon_drag_ghost_position = None
 
     def _on_patreon_heading_motion(self, event: tk.Event) -> None:

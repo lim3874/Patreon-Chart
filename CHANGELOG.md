@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.13.4 - 2026-05-15
+
+### Fixed
+
+- Reduce Patreon API column drag lag by moving the preview back to a reused lightweight popup instead of repainting it inside the table window.
+- Prevent the drag preview from flashing at its default position before it is placed under the cursor.
+
 ## 2.13.3 - 2026-05-15
 
 ### Fixed
