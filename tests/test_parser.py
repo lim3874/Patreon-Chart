@@ -12,6 +12,7 @@ from export_patreon_members import (  # noqa: E402
     SourceMessage,
     parse_member_record,
 )
+from patreon_api import extract_discord_connection  # noqa: E402
 
 
 class PatreonParserTests(unittest.TestCase):
@@ -67,6 +68,18 @@ class PatreonParserTests(unittest.TestCase):
             "곧 출금이 가능해집니다!",
         )
         self.assertIsNone(record)
+
+    def test_discord_social_connection_is_extracted(self):
+        discord = extract_discord_connection(
+            {
+                "discord": {
+                    "user_id": "1234567890",
+                    "username": "membername",
+                }
+            }
+        )
+        self.assertEqual(discord["user_id"], "1234567890")
+        self.assertEqual(discord["username"], "membername")
 
 
 if __name__ == "__main__":

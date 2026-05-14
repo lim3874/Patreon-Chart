@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.8.0 - 2026-05-14
+
+### Added
+
+- Replace the native Windows title bar with an app-rendered dark title bar so dark mode does not depend on OS title-bar support.
+- Add Discord ID and Discord name columns to Patreon API imports via `user.social_connections`.
+- Add more Patreon API member fields: next charge date, next pay amount, pledge cadence, gift/free-trial flags, member note, profile URL, and lifetime support amount.
+- Add a unit test for Discord social connection parsing.
+
+### Changed
+
+- Patreon API table sorting now handles the new amount, date, and boolean fields using typed sort keys.
+
 ## 2.7.2 - 2026-05-14
 
 ### Fixed

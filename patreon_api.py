@@ -15,17 +15,28 @@ USER_AGENT = "Patreon Member Exporter - Local Dashboard"
 
 PATREON_FIELDS = [
     "member_id",
+    "user_id",
     "full_name",
     "email",
+    "discord_user_id",
+    "discord_username",
     "patron_status",
     "tier_title",
     "tier_amount_cents",
     "currently_entitled_amount_cents",
+    "will_pay_amount_cents",
     "last_charge_date",
     "last_charge_status",
+    "next_charge_date",
     "pledge_relationship_start",
+    "pledge_cadence",
+    "is_gifted",
+    "is_free_trial",
     "lifetime_support_cents",
     "campaign_lifetime_support_cents",
+    "note",
+    "user_url",
+    "thumb_url",
 ]
 
 
@@ -104,10 +115,16 @@ class PatreonClient:
                     "currently_entitled_amount_cents",
                     "campaign_lifetime_support_cents",
                     "pledge_relationship_start",
+                    "next_charge_date",
+                    "pledge_cadence",
+                    "will_pay_amount_cents",
+                    "is_gifted",
+                    "is_free_trial",
+                    "note",
                 ]
             ),
             "fields[tier]": "amount_cents,title",
-            "fields[user]": "full_name,email",
+            "fields[user]": "full_name,email,social_connections,url,thumb_url",
             "page[count]": "1000",
         }
         url = f"{API_BASE}/campaigns/{campaign_id}/members"
@@ -238,20 +255,49 @@ def member_to_row(item: dict[str, Any], included: dict[tuple[str, str], dict[str
     user_attrs = user.get("attributes", {})
     email = attrs.get("email") or user_attrs.get("email") or ""
     full_name = attrs.get("full_name") or user_attrs.get("full_name") or ""
+    discord = extract_discord_connection(user_attrs.get("social_connections"))
     return {
         "member_id": str(item.get("id", "")),
+        "user_id": str(user.get("id") or user_ref.get("id") or ""),
         "full_name": str(full_name or ""),
         "email": str(email or ""),
+        "discord_user_id": discord["user_id"],
+        "discord_username": discord["username"],
         "patron_status": str(attrs.get("patron_status") or ""),
         "tier_title": " / ".join(tier_titles),
         "tier_amount_cents": " / ".join(tier_amounts),
         "currently_entitled_amount_cents": cents_to_str(attrs.get("currently_entitled_amount_cents")),
+        "will_pay_amount_cents": cents_to_str(attrs.get("will_pay_amount_cents")),
         "last_charge_date": str(attrs.get("last_charge_date") or ""),
         "last_charge_status": str(attrs.get("last_charge_status") or ""),
+        "next_charge_date": str(attrs.get("next_charge_date") or ""),
         "pledge_relationship_start": str(attrs.get("pledge_relationship_start") or ""),
+        "pledge_cadence": str(attrs.get("pledge_cadence") or ""),
+        "is_gifted": bool_to_str(attrs.get("is_gifted")),
+        "is_free_trial": bool_to_str(attrs.get("is_free_trial")),
         "lifetime_support_cents": cents_to_str(attrs.get("lifetime_support_cents")),
         "campaign_lifetime_support_cents": cents_to_str(attrs.get("campaign_lifetime_support_cents")),
+        "note": str(attrs.get("note") or ""),
+        "user_url": str(user_attrs.get("url") or ""),
+        "thumb_url": str(user_attrs.get("thumb_url") or ""),
     }
+
+
+def extract_discord_connection(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {"user_id": "", "username": ""}
+    discord = value.get("discord")
+    if not isinstance(discord, dict):
+        return {"user_id": "", "username": str(discord or "")}
+    user_id = discord.get("user_id") or discord.get("id") or discord.get("external_id") or ""
+    username = (
+        discord.get("username")
+        or discord.get("name")
+        or discord.get("display_name")
+        or discord.get("user_name")
+        or ""
+    )
+    return {"user_id": str(user_id or ""), "username": str(username or "")}
 
 
 def cents_to_str(value: Any) -> str:
@@ -261,6 +307,14 @@ def cents_to_str(value: Any) -> str:
         return f"{int(value) / 100:.2f}"
     except (TypeError, ValueError):
         return str(value)
+
+
+def bool_to_str(value: Any) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return ""
 
 
 def write_patreon_members_csv(path: Path, rows: list[dict[str, str]]) -> None:

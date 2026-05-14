@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -49,6 +50,7 @@ APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 ASSETS_DIR = APP_DIR / "assets"
 APP_ICON_PATH = ASSETS_DIR / "patreon_chart_icon_v4.ico"
 APP_ICON_PNG_PATH = ASSETS_DIR / "patreon_chart_icon_v4.png"
+APP_TITLE = "Patreon 가입자 대시보드"
 _WINDOWS_PROCESS_CONFIGURED = False
 
 TABLE_COLUMNS = [
@@ -68,12 +70,22 @@ TABLE_COLUMNS = [
 PATREON_TABLE_COLUMNS = [
     ("full_name", "이름", 170),
     ("email", "이메일", 240),
+    ("discord_user_id", "Discord ID", 150),
+    ("discord_username", "Discord 이름", 150),
     ("patron_status", "상태", 120),
     ("tier_title", "Patreon 티어", 160),
     ("currently_entitled_amount_cents", "현재 금액", 100),
+    ("will_pay_amount_cents", "다음 결제액", 110),
     ("last_charge_status", "최근 결제", 110),
     ("last_charge_date", "최근 결제일", 170),
+    ("next_charge_date", "다음 결제일", 170),
+    ("pledge_cadence", "청구 간격", 100),
+    ("is_gifted", "선물", 80),
+    ("is_free_trial", "무료 체험", 100),
     ("pledge_relationship_start", "가입 시작일", 170),
+    ("campaign_lifetime_support_cents", "누적 후원액", 120),
+    ("note", "메모", 180),
+    ("user_url", "프로필 URL", 240),
 ]
 
 LIGHT_THEME = {
@@ -164,11 +176,18 @@ class PatreonMemberApp(tk.Tk):
         configure_windows_process()
         super().__init__()
         self._configure_dpi_scaling()
-        self.title("Patreon 가입자 대시보드")
+        self.title(APP_TITLE)
         self._icon_image: tk.PhotoImage | None = None
+        self._title_icon_image: tk.PhotoImage | None = None
         self._apply_window_icon()
         self.geometry("1280x820")
         self.minsize(1120, 720)
+        self.custom_chrome = sys.platform == "win32"
+        self._custom_maximized = False
+        self._normal_geometry = ""
+        self._drag_state: tuple[int, int, int, int] | None = None
+        if self.custom_chrome:
+            self.overrideredirect(True)
 
         self.rows: list[dict[str, str]] = []
         self.visible_rows: list[dict[str, str]] = []
@@ -427,6 +446,123 @@ class PatreonMemberApp(tk.Tk):
         target.after_idle(apply_theme)
         target.after(250, apply_theme)
 
+    def _build_window_chrome(self) -> None:
+        p = self.palette
+        self.window_chrome = tk.Frame(
+            self,
+            bg=p["topbar"],
+            height=34,
+            highlightbackground=p["line"],
+            highlightthickness=1,
+        )
+        self.window_chrome.pack(side=tk.TOP, fill=tk.X)
+        self.window_chrome.pack_propagate(False)
+
+        title_area = tk.Frame(self.window_chrome, bg=p["topbar"])
+        title_area.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0))
+        if self._title_icon_image is not None:
+            icon_label = tk.Label(title_area, image=self._title_icon_image, bg=p["topbar"])
+            icon_label.pack(side=tk.LEFT, padx=(0, 8))
+        else:
+            icon_label = tk.Label(title_area, text="▣", bg=p["topbar"], fg=p["accent"], font=("Segoe UI", 11, "bold"))
+            icon_label.pack(side=tk.LEFT, padx=(0, 8))
+        title_label = tk.Label(
+            title_area,
+            text=APP_TITLE,
+            bg=p["topbar"],
+            fg=p["ink"],
+            font=("Malgun Gothic", 10),
+        )
+        title_label.pack(side=tk.LEFT)
+
+        controls = tk.Frame(self.window_chrome, bg=p["topbar"])
+        controls.pack(side=tk.RIGHT, fill=tk.Y)
+        self._chrome_button(controls, "─", self._minimize_custom_window).pack(side=tk.LEFT, fill=tk.Y)
+        self._chrome_button(controls, "□", self._toggle_custom_maximize).pack(side=tk.LEFT, fill=tk.Y)
+        self._chrome_button(controls, "×", self.destroy, close=True).pack(side=tk.LEFT, fill=tk.Y)
+
+        for widget in (self.window_chrome, title_area, icon_label, title_label):
+            widget.bind("<ButtonPress-1>", self._start_window_drag)
+            widget.bind("<B1-Motion>", self._drag_window)
+            widget.bind("<Double-Button-1>", lambda _event: self._toggle_custom_maximize())
+
+        self.after(50, self._show_custom_chrome_in_taskbar)
+
+    def _chrome_button(self, parent: tk.Frame, text: str, command: Callable[[], None], close: bool = False) -> tk.Label:
+        p = self.palette
+        button = tk.Label(
+            parent,
+            text=text,
+            bg=p["topbar"],
+            fg=p["ink"],
+            width=5,
+            font=("Segoe UI", 11, "bold"),
+            cursor="hand2",
+        )
+        hover_bg = "#c42b1c" if close else p["panel_alt"]
+        hover_fg = "#ffffff" if close else p["ink"]
+        button.bind("<Enter>", lambda _event: button.configure(bg=hover_bg, fg=hover_fg))
+        button.bind("<Leave>", lambda _event: button.configure(bg=p["topbar"], fg=p["ink"]))
+        button.bind("<ButtonRelease-1>", lambda _event: command())
+        return button
+
+    def _start_window_drag(self, event: tk.Event) -> None:
+        if self._custom_maximized:
+            return
+        self._drag_state = (event.x_root, event.y_root, self.winfo_x(), self.winfo_y())
+
+    def _drag_window(self, event: tk.Event) -> None:
+        if not self._drag_state or self._custom_maximized:
+            return
+        start_x, start_y, window_x, window_y = self._drag_state
+        self.geometry(f"+{window_x + event.x_root - start_x}+{window_y + event.y_root - start_y}")
+
+    def _minimize_custom_window(self) -> None:
+        if not self.custom_chrome:
+            self.iconify()
+            return
+        self.overrideredirect(False)
+        self.iconify()
+        self.after(250, self._restore_custom_chrome_after_map)
+
+    def _restore_custom_chrome_after_map(self) -> None:
+        if self.state() == "iconic":
+            self.after(250, self._restore_custom_chrome_after_map)
+            return
+        self.overrideredirect(True)
+        self._show_custom_chrome_in_taskbar()
+
+    def _toggle_custom_maximize(self) -> None:
+        if self._custom_maximized:
+            if self._normal_geometry:
+                self.geometry(self._normal_geometry)
+            self._custom_maximized = False
+            return
+        self._normal_geometry = self.geometry()
+        x, y, width, height = get_windows_work_area(self)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self._custom_maximized = True
+
+    def _show_custom_chrome_in_taskbar(self) -> None:
+        if not self.custom_chrome:
+            return
+        try:
+            import ctypes
+
+            hwnds = get_windows_toplevel_handles(self, ctypes)
+            if not hwnds:
+                return
+            hwnd = hwnds[-1]
+            user32 = ctypes.windll.user32
+            gwl_exstyle = -20
+            ws_ex_appwindow = 0x00040000
+            ws_ex_toolwindow = 0x00000080
+            style = user32.GetWindowLongW(ctypes.c_void_p(hwnd), gwl_exstyle)
+            style = (style | ws_ex_appwindow) & ~ws_ex_toolwindow
+            user32.SetWindowLongW(ctypes.c_void_p(hwnd), gwl_exstyle, style)
+        except Exception:
+            pass
+
     def _build_ui(self) -> None:
         p = self.palette
         self.configure(bg=p["content"])
@@ -450,6 +586,9 @@ class PatreonMemberApp(tk.Tk):
             "declined": tk.StringVar(value="0"),
             "former": tk.StringVar(value="0"),
         }
+
+        if self.custom_chrome:
+            self._build_window_chrome()
 
         shell = tk.Frame(self, bg=p["content"])
         shell.pack(fill=tk.BOTH, expand=True)
@@ -670,14 +809,16 @@ class PatreonMemberApp(tk.Tk):
                 self.iconbitmap(default=str(APP_ICON_PATH))
             except tk.TclError:
                 pass
-        if sys.platform == "win32":
-            return
         if APP_ICON_PNG_PATH.exists():
             try:
-                self._icon_image = tk.PhotoImage(file=str(APP_ICON_PNG_PATH))
+                icon_image = tk.PhotoImage(file=str(APP_ICON_PNG_PATH))
+                self._icon_image = icon_image
+                scale = max(1, round(max(icon_image.width(), icon_image.height()) / 18))
+                self._title_icon_image = icon_image.subsample(scale, scale)
                 self.iconphoto(True, self._icon_image)
             except tk.TclError:
                 self._icon_image = None
+                self._title_icon_image = None
 
     def _configure_dpi_scaling(self) -> None:
         if sys.platform != "win32":
@@ -1635,13 +1776,15 @@ class PatreonMemberApp(tk.Tk):
 
     def _patreon_sort_value(self, row: dict[str, str], column: str) -> object:
         value = row.get(column, "").strip()
-        if column == "currently_entitled_amount_cents":
+        if column in {"currently_entitled_amount_cents", "will_pay_amount_cents", "campaign_lifetime_support_cents"}:
             try:
                 return float(value.replace(",", ""))
             except ValueError:
                 return 0.0
-        if column in {"last_charge_date", "pledge_relationship_start"}:
+        if column in {"last_charge_date", "next_charge_date", "pledge_relationship_start"}:
             return self._parse_patreon_datetime(value) or dt.datetime.min
+        if column in {"is_gifted", "is_free_trial"}:
+            return {"true": 1, "false": 0}.get(value.casefold(), -1)
         if column == "tier_title":
             return self._patreon_tier_sort_value(value)
         return self._patreon_table_value(row, column).casefold()
@@ -2352,6 +2495,35 @@ def redraw_windows_frame(hwnd: int, ctypes_module: object) -> None:
     rdw_frame = 0x0400
     user32.SetWindowPos(hwnd_arg, None, 0, 0, 0, 0, swp_nomove | swp_nosize | swp_nozorder | swp_framechanged)
     user32.RedrawWindow(hwnd_arg, None, None, rdw_invalidate | rdw_updatenow | rdw_frame)
+
+
+def get_windows_work_area(window: tk.Tk | tk.Toplevel) -> tuple[int, int, int, int]:
+    if sys.platform != "win32":
+        return 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        handles = get_windows_toplevel_handles(window, ctypes)
+        hwnd = handles[-1] if handles else int(window.winfo_id())
+        monitor = ctypes.windll.user32.MonitorFromWindow(ctypes.c_void_p(hwnd), 2)
+
+        class MonitorInfo(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT),
+                ("dwFlags", wintypes.DWORD),
+            ]
+
+        info = MonitorInfo()
+        info.cbSize = ctypes.sizeof(MonitorInfo)
+        if ctypes.windll.user32.GetMonitorInfoW(ctypes.c_void_p(monitor), ctypes.byref(info)):
+            rect = info.rcWork
+            return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
+    except Exception:
+        pass
+    return 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
 
 
 def hex_to_colorref(value: str) -> int:
