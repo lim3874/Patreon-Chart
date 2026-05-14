@@ -14,6 +14,13 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+from discord_api import (
+    DiscordApiError,
+    DiscordCredentials,
+    enrich_rows_with_discord,
+    load_credentials as load_discord_credentials,
+    save_credentials as save_discord_credentials,
+)
 from export_patreon_members import (
     APP_DIR,
     RateProvider,
@@ -45,6 +52,7 @@ CREDENTIALS_PATH = APP_DIR / "credentials.json"
 TOKEN_PATH = APP_DIR / "token.json"
 CACHE_PATH = APP_DIR / ".cache" / "rates.json"
 PATREON_CREDENTIALS_PATH = APP_DIR / "patreon_credentials.json"
+DISCORD_CREDENTIALS_PATH = APP_DIR / "discord_credentials.json"
 PATREON_MEMBERS_CSV_PATH = OUTPUT_DIR / "patreon_api_members.csv"
 APP_SETTINGS_PATH = APP_DIR / "app_settings.json"
 ASSETS_DIR = APP_DIR / "assets"
@@ -71,7 +79,12 @@ PATREON_TABLE_COLUMNS = [
     ("full_name", "이름", 170),
     ("email", "이메일", 240),
     ("discord_user_id", "Discord 사용자 ID", 170),
-    ("discord_username", "Discord 이름(봇 필요)", 170),
+    ("discord_username", "Discord 사용자명", 160),
+    ("discord_global_name", "Discord 표시명", 160),
+    ("discord_nick", "Discord 서버 닉네임", 170),
+    ("discord_role_names", "Discord 역할", 220),
+    ("discord_joined_at", "Discord 서버 가입일", 170),
+    ("discord_lookup_status", "Discord 조회", 120),
     ("patron_status", "상태", 120),
     ("tier_title", "Patreon 티어", 160),
     ("tier_amount_cents", "티어 금액", 100),
@@ -186,6 +199,7 @@ INSIGHT_DIMENSIONS = ["전체", "재구독", "멤버십 등급", "청구 주기"
 SERIES_COLORS = ["#9db8ef", "#55e0aa", "#ffb779", "#8f98aa", "#d79b76", "#a78bfa"]
 GMAIL_REFRESH_TEXT = "▭  Gmail에서 불러오기"
 PATREON_REFRESH_TEXT = "현재 멤버 불러오기"
+DISCORD_REFRESH_TEXT = "Discord 정보 채우기"
 LOADING_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
@@ -1055,6 +1069,32 @@ class PatreonMemberApp(tk.Tk):
         self.patreon_refresh_button.pack(side=tk.LEFT, padx=(0, 12))
         tk.Button(
             toolbar,
+            text="Discord 봇 설정",
+            command=self.open_discord_settings,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        self.discord_refresh_button = tk.Button(
+            toolbar,
+            text=DISCORD_REFRESH_TEXT,
+            command=self.refresh_from_discord,
+            bd=0,
+            bg=self.palette["panel_alt"],
+            fg=self.palette["ink"],
+            disabledforeground=self.palette["muted"],
+            padx=18,
+            pady=10,
+            cursor="hand2",
+            font=("Segoe UI", 11, "bold"),
+        )
+        self.discord_refresh_button.pack(side=tk.LEFT, padx=(0, 12))
+        tk.Button(
+            toolbar,
             text="Patreon CSV 열기",
             command=self.open_patreon_csv,
             bd=0,
@@ -1521,6 +1561,8 @@ class PatreonMemberApp(tk.Tk):
             self.refresh_button.configure(state=tk.DISABLED)
         if hasattr(self, "patreon_refresh_button"):
             self.patreon_refresh_button.configure(state=tk.DISABLED)
+        if hasattr(self, "discord_refresh_button"):
+            self.discord_refresh_button.configure(state=tk.DISABLED)
         self._animate_loading_button()
 
     def _animate_loading_button(self) -> None:
@@ -1532,6 +1574,8 @@ class PatreonMemberApp(tk.Tk):
             self.refresh_button.configure(text=f"{frame}  Gmail 불러오는 중...")
         elif self.loading_context == "patreon" and hasattr(self, "patreon_refresh_button"):
             self.patreon_refresh_button.configure(text=f"{frame}  Patreon 불러오는 중...")
+        elif self.loading_context == "discord" and hasattr(self, "discord_refresh_button"):
+            self.discord_refresh_button.configure(text=f"{frame}  Discord 조회 중...")
         self.loading_after_id = self.after(160, self._animate_loading_button)
 
     def _stop_loading(self) -> None:
@@ -1548,6 +1592,8 @@ class PatreonMemberApp(tk.Tk):
             self.refresh_button.configure(text=GMAIL_REFRESH_TEXT, state=tk.NORMAL)
         if hasattr(self, "patreon_refresh_button"):
             self.patreon_refresh_button.configure(text=PATREON_REFRESH_TEXT, state=tk.NORMAL)
+        if hasattr(self, "discord_refresh_button"):
+            self.discord_refresh_button.configure(text=DISCORD_REFRESH_TEXT, state=tk.NORMAL)
 
     def refresh_from_gmail(self) -> None:
         if self.is_running:
@@ -1580,6 +1626,30 @@ class PatreonMemberApp(tk.Tk):
         self._start_loading("patreon")
         self.patreon_status_var.set("Patreon API에서 현재 멤버를 읽는 중입니다.")
         worker = threading.Thread(target=self._patreon_worker, daemon=True)
+        worker.start()
+
+    def refresh_from_discord(self) -> None:
+        if self.is_running:
+            return
+        if not self.patreon_rows:
+            messagebox.showwarning("Patreon 데이터 필요", "먼저 Patreon 현재 멤버를 불러오거나 기존 CSV를 열어야 합니다.")
+            return
+        try:
+            credentials = load_discord_credentials(DISCORD_CREDENTIALS_PATH)
+        except DiscordApiError as exc:
+            messagebox.showerror("Discord 설정 오류", str(exc))
+            return
+        if not credentials.is_complete():
+            messagebox.showwarning(
+                "Discord 봇 설정 필요",
+                "Discord 봇 토큰과 서버 ID를 저장해야 Discord 이름/닉네임을 조회할 수 있습니다.",
+            )
+            self.open_discord_settings()
+            return
+        self._start_loading("discord")
+        self.patreon_status_var.set("Discord 봇으로 사용자명, 닉네임, 역할을 조회하는 중입니다.")
+        rows = [dict(row) for row in self.patreon_rows]
+        worker = threading.Thread(target=self._discord_worker, args=(rows,), daemon=True)
         worker.start()
 
     def _gmail_worker(self, start_text: str, end_text: str) -> None:
@@ -1628,13 +1698,33 @@ class PatreonMemberApp(tk.Tk):
                 raise PatreonApiError("No Patreon campaigns were returned for this token.")
             campaign = campaigns[0]
             rows = client.get_members(campaign["id"])
+            discord_stats: dict[str, int | str] | None = None
+            try:
+                if load_discord_credentials(DISCORD_CREDENTIALS_PATH).is_complete():
+                    rows, discord_stats = enrich_rows_with_discord(rows, DISCORD_CREDENTIALS_PATH)
+            except DiscordApiError:
+                error_text = traceback.format_exc()
+                OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+                (OUTPUT_DIR / "discord_api_error.log").write_text(error_text, encoding="utf-8")
+                discord_stats = {"error": "Discord 조회 실패"}
             write_patreon_members_csv(PATREON_MEMBERS_CSV_PATH, rows)
-            self.worker_queue.put(("patreon_success", {"campaign": campaign, "rows": rows}))
+            self.worker_queue.put(("patreon_success", {"campaign": campaign, "rows": rows, "discord_stats": discord_stats}))
         except Exception:
             error_text = traceback.format_exc()
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             (OUTPUT_DIR / "patreon_api_error.log").write_text(error_text, encoding="utf-8")
             self.worker_queue.put(("patreon_error", error_text))
+
+    def _discord_worker(self, rows: list[dict[str, str]]) -> None:
+        try:
+            rows, stats = enrich_rows_with_discord(rows, DISCORD_CREDENTIALS_PATH)
+            write_patreon_members_csv(PATREON_MEMBERS_CSV_PATH, rows)
+            self.worker_queue.put(("discord_success", {"rows": rows, "stats": stats}))
+        except Exception:
+            error_text = traceback.format_exc()
+            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            (OUTPUT_DIR / "discord_api_error.log").write_text(error_text, encoding="utf-8")
+            self.worker_queue.put(("discord_error", error_text))
 
     def _poll_worker_queue(self) -> None:
         try:
@@ -1657,19 +1747,47 @@ class PatreonMemberApp(tk.Tk):
                     self.patreon_rows = list(payload_dict["rows"])
                     self._set_patreon_rows(self.patreon_rows)
                     campaign = payload_dict["campaign"]
+                    discord_stats = payload_dict.get("discord_stats")
+                    discord_text = self._discord_stats_text(discord_stats) if isinstance(discord_stats, dict) else ""
                     self.patreon_status_var.set(
-                        f"Patreon 동기화 완료: {campaign.get('creation_name') or campaign.get('id')} / {len(self.patreon_rows)}명"
+                        f"Patreon 동기화 완료: {campaign.get('creation_name') or campaign.get('id')} / {len(self.patreon_rows)}명{discord_text}"
                     )
-                    messagebox.showinfo("완료", f"Patreon 현재 멤버 {len(self.patreon_rows)}명을 불러왔습니다.")
+                    messagebox.showinfo("완료", f"Patreon 현재 멤버 {len(self.patreon_rows)}명을 불러왔습니다.{discord_text}")
                 elif event == "patreon_error":
                     self.patreon_status_var.set("Patreon API 오류가 발생했습니다.")
                     messagebox.showerror(
                         "Patreon API 오류",
                         "Patreon API 작업 중 오류가 발생했습니다.\n\n자세한 내용은 output\\patreon_api_error.log를 확인하세요.",
                     )
+                elif event == "discord_success":
+                    payload_dict = dict(payload)  # type: ignore[arg-type]
+                    self.patreon_rows = list(payload_dict["rows"])
+                    self._set_patreon_rows(self.patreon_rows)
+                    stats = dict(payload_dict["stats"])  # type: ignore[arg-type]
+                    summary = self._discord_stats_text(stats)
+                    self.patreon_status_var.set(f"Discord 조회 완료{summary}")
+                    messagebox.showinfo("완료", f"Discord 정보를 채웠습니다.{summary}")
+                elif event == "discord_error":
+                    self.patreon_status_var.set("Discord API 오류가 발생했습니다.")
+                    messagebox.showerror(
+                        "Discord API 오류",
+                        "Discord API 작업 중 오류가 발생했습니다.\n\n자세한 내용은 output\\discord_api_error.log를 확인하세요.",
+                    )
         except queue.Empty:
             pass
         self.after(200, self._poll_worker_queue)
+
+    def _discord_stats_text(self, stats: dict[object, object] | None) -> str:
+        if not stats:
+            return ""
+        if stats.get("error"):
+            return " / Discord 조회 실패"
+        found = int(stats.get("found", 0) or 0)
+        checked = int(stats.get("checked", 0) or 0)
+        not_in_server = int(stats.get("not_in_server", 0) or 0)
+        if checked == 0:
+            return ""
+        return f" / Discord {found}/{checked}명 확인, 서버 없음 {not_in_server}명"
 
     def _update_metrics(self, rows: list[dict[str, str]]) -> None:
         counts = self._tier_counts(rows)
@@ -1825,6 +1943,9 @@ class PatreonMemberApp(tk.Tk):
             "campaign_created_at",
             "campaign_published_at",
             "address_created_at",
+            "discord_resolved_at",
+            "discord_joined_at",
+            "discord_premium_since",
         }
         boolean_columns = {
             "is_follower",
@@ -1843,6 +1964,8 @@ class PatreonMemberApp(tk.Tk):
             "campaign_is_monthly",
             "campaign_is_nsfw",
             "campaign_show_earnings",
+            "discord_bot",
+            "discord_system",
         }
         if column in amount_columns:
             try:
@@ -1908,6 +2031,11 @@ class PatreonMemberApp(tk.Tk):
                 "Pending": "대기 중",
                 "Refunded": "환불",
             }.get(value, value)
+        if column == "discord_lookup_status":
+            return {
+                "found": "확인됨",
+                "not_in_server": "서버 없음",
+            }.get(value, value)
         return value
 
     def _patreon_status_counts(self, rows: list[dict[str, str]]) -> dict[str, int]:
@@ -1963,6 +2091,65 @@ class PatreonMemberApp(tk.Tk):
                 return
             save_patreon_credentials(PATREON_CREDENTIALS_PATH, new_credentials)
             self.patreon_status_var.set("Patreon API 키를 저장했습니다.")
+            dialog.destroy()
+
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill=tk.X, pady=(18, 0))
+        ttk.Button(buttons, text="저장", style="Accent.TButton", command=save).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="취소", command=dialog.destroy).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def open_discord_settings(self) -> None:
+        try:
+            credentials = load_discord_credentials(DISCORD_CREDENTIALS_PATH)
+        except DiscordApiError as exc:
+            messagebox.showerror("Discord 설정 오류", str(exc))
+            credentials = DiscordCredentials("", "")
+        dialog = tk.Toplevel(self)
+        dialog.title("Discord 봇 설정")
+        dialog.geometry("760x360")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.configure(bg=self.palette["bg"])
+        self._apply_window_chrome(dialog)
+        frame = ttk.Frame(dialog, padding=18)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="봇 토큰은 비밀번호처럼 보관됩니다. 채팅에 노출된 토큰은 Discord Developer Portal에서 Reset Token 후 새 토큰을 저장하세요.",
+            style="Muted.TLabel",
+            wraplength=700,
+        ).pack(anchor=tk.W, pady=(0, 12))
+        fields = [
+            ("봇 토큰", "bot_token", credentials.bot_token, True),
+            ("서버 ID", "guild_id", credentials.guild_id, False),
+        ]
+        variables: dict[str, tk.StringVar] = {}
+        for label, key, value, secret in fields:
+            row = ttk.Frame(frame)
+            row.pack(fill=tk.X, pady=6)
+            ttk.Label(row, text=label, width=16).pack(side=tk.LEFT)
+            var = tk.StringVar(value=value)
+            variables[key] = var
+            entry = ttk.Entry(row, textvariable=var, show="*" if secret else "", width=82)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        help_text = (
+            "Developer Portal > Bot > Privileged Gateway Intents에서 Server Members Intent를 켜야 "
+            "서버 닉네임과 역할을 안정적으로 조회할 수 있습니다."
+        )
+        ttk.Label(frame, text=help_text, style="Muted.TLabel", wraplength=700).pack(anchor=tk.W, pady=(12, 0))
+
+        def save() -> None:
+            new_credentials = DiscordCredentials(
+                bot_token=variables["bot_token"].get().strip(),
+                guild_id=variables["guild_id"].get().strip(),
+            )
+            if not new_credentials.is_complete():
+                messagebox.showwarning("입력 필요", "봇 토큰과 서버 ID를 모두 입력해야 합니다.")
+                return
+            save_discord_credentials(DISCORD_CREDENTIALS_PATH, new_credentials)
+            self.patreon_status_var.set("Discord 봇 설정을 저장했습니다.")
             dialog.destroy()
 
         buttons = ttk.Frame(frame)

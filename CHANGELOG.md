@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.10.0 - 2026-05-15
+
+### Added
+
+- Add optional Discord bot integration for resolving Patreon-provided Discord user IDs into Discord usernames, display names, server nicknames, roles, and server join dates.
+- Add a Discord bot settings dialog that stores the bot token and target server ID in ignored local `discord_credentials.json`.
+- Add a `Discord 정보 채우기` action to enrich existing Patreon API CSV rows without reloading Patreon.
+- Add Discord lookup status and server/member fields to the Patreon API CSV and table.
+- Add tests for flattening Discord guild member responses.
+
+### Changed
+
+- Patreon current-member imports automatically attempt Discord enrichment when Discord credentials are configured, while preserving the Patreon import if Discord lookup fails.
+
 ## 2.9.0 - 2026-05-15
 
 ### Added

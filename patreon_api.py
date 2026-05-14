@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from discord_api import DISCORD_FIELDS
+
 API_BASE = "https://www.patreon.com/api/oauth2/v2"
 TOKEN_URL = "https://www.patreon.com/api/oauth2/token"
 USER_AGENT = "Patreon Member Exporter - Local Dashboard"
@@ -134,6 +136,7 @@ PATREON_FIELDS = [
     "email",
     "discord_user_id",
     "discord_username",
+    *DISCORD_FIELDS,
     "patron_status",
     "is_follower",
     "is_gifted",

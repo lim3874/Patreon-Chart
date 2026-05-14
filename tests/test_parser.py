@@ -13,6 +13,7 @@ from export_patreon_members import (  # noqa: E402
     parse_member_record,
 )
 from patreon_api import extract_discord_connection, member_to_row  # noqa: E402
+from discord_api import DiscordClient  # noqa: E402
 
 
 class PatreonParserTests(unittest.TestCase):
@@ -136,6 +137,35 @@ class PatreonParserTests(unittest.TestCase):
         self.assertEqual(row["tier_discord_role_ids"], "333")
         self.assertEqual(row["pledge_event_count"], "1")
         self.assertEqual(row["last_pledge_event_type"], "pledge_start")
+
+    def test_discord_member_resolution_flattens_guild_fields(self):
+        client = DiscordClient.__new__(DiscordClient)
+
+        def fake_member(user_id):
+            self.assertEqual(user_id, "111")
+            return {
+                "nick": "Server Nick",
+                "roles": ["333", "444"],
+                "joined_at": "2026-05-01T00:00:00+00:00",
+                "premium_since": None,
+                "avatar": "member-avatar",
+                "user": {
+                    "id": "111",
+                    "username": "discord_user",
+                    "global_name": "Global Name",
+                    "avatar": "user-avatar",
+                    "bot": False,
+                },
+            }
+
+        client.get_guild_member = fake_member
+        row = client.resolve_member("111", {"333": "Tier 2", "444": "@everyone"})
+        self.assertEqual(row["discord_lookup_status"], "found")
+        self.assertEqual(row["discord_username"], "discord_user")
+        self.assertEqual(row["discord_display_name"], "Server Nick")
+        self.assertEqual(row["discord_global_name"], "Global Name")
+        self.assertEqual(row["discord_role_names"], "Tier 2")
+        self.assertEqual(row["discord_joined_at"], "2026-05-01T00:00:00+00:00")
 
 
 if __name__ == "__main__":

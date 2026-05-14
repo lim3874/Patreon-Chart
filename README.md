@@ -114,6 +114,17 @@ python .\export_patreon_members.py --exchange-mode off
 
 Patreon API 결과는 `output\patreon_api_members.csv`에 저장됩니다.
 
+## Discord 봇 연동
+
+Patreon API는 Discord 연결 정보로 숫자형 Discord 사용자 ID까지만 제공합니다. 사용자명, 서버 닉네임, 역할, 서버 가입일을 채우려면 `Patreon API` 화면에서 `Discord 봇 설정`을 열고 다음 값을 저장하세요.
+
+- Bot Token
+- Guild ID
+
+이 값들은 `discord_credentials.json`에 저장되며 `.gitignore`에 포함되어 있습니다. 봇 토큰은 비밀번호처럼 취급하고 공개하지 마세요. 이미 공개된 토큰은 Discord Developer Portal에서 `Reset Token`으로 새로 발급하세요.
+
+Discord Developer Portal의 해당 봇 `Bot` 메뉴에서 `Privileged Gateway Intents`의 `Server Members Intent`를 켜야 서버 멤버 정보를 안정적으로 조회할 수 있습니다. 설정 후 `Discord 정보 채우기`를 누르면 기존 Patreon API CSV도 다시 보강됩니다.
+
 ## 티어 매핑 수정
 
 Patreon 지역가가 확인되면 `config.json`의 `local_price_map`에 추가하세요.

@@ -2,6 +2,7 @@ credentials.json
 token.json
 config.json
 patreon_credentials.json
+discord_credentials.json
 app_settings.json
 output/
 .cache/
