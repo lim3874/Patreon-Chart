@@ -70,22 +70,40 @@ TABLE_COLUMNS = [
 PATREON_TABLE_COLUMNS = [
     ("full_name", "이름", 170),
     ("email", "이메일", 240),
-    ("discord_user_id", "Discord ID", 150),
-    ("discord_username", "Discord 이름", 150),
+    ("discord_user_id", "Discord 사용자 ID", 170),
+    ("discord_username", "Discord 이름(봇 필요)", 170),
     ("patron_status", "상태", 120),
     ("tier_title", "Patreon 티어", 160),
+    ("tier_amount_cents", "티어 금액", 100),
+    ("tier_discord_role_ids", "Discord 역할 ID", 170),
     ("currently_entitled_amount_cents", "현재 금액", 100),
     ("will_pay_amount_cents", "다음 결제액", 110),
+    ("campaign_lifetime_support_cents", "누적 후원액", 120),
     ("last_charge_status", "최근 결제", 110),
     ("last_charge_date", "최근 결제일", 170),
     ("next_charge_date", "다음 결제일", 170),
     ("pledge_cadence", "청구 간격", 100),
     ("is_gifted", "선물", 80),
     ("is_free_trial", "무료 체험", 100),
+    ("is_follower", "팔로워", 80),
     ("pledge_relationship_start", "가입 시작일", 170),
-    ("campaign_lifetime_support_cents", "누적 후원액", 120),
+    ("pledge_event_count", "히스토리 수", 100),
+    ("first_pledge_event_date", "첫 이벤트일", 170),
+    ("first_pledge_event_type", "첫 이벤트", 120),
+    ("last_pledge_event_date", "최근 이벤트일", 170),
+    ("last_pledge_event_type", "최근 이벤트", 120),
+    ("last_pledge_event_payment_status", "최근 이벤트 결제", 130),
     ("note", "메모", 180),
+    ("user_created", "Patreon 가입일", 170),
+    ("user_vanity", "Patreon 사용자명", 150),
     ("user_url", "프로필 URL", 240),
+    ("thumb_url", "프로필 이미지", 220),
+    ("campaign_name", "캠페인명", 150),
+    ("campaign_currency", "캠페인 통화", 110),
+    ("campaign_discord_server_id", "Discord 서버 ID", 170),
+    ("address_country", "배송 국가", 100),
+    ("address_city", "배송 도시", 120),
+    ("address_postal_code", "우편번호", 100),
 ]
 
 LIGHT_THEME = {
@@ -1776,15 +1794,73 @@ class PatreonMemberApp(tk.Tk):
 
     def _patreon_sort_value(self, row: dict[str, str], column: str) -> object:
         value = row.get(column, "").strip()
-        if column in {"currently_entitled_amount_cents", "will_pay_amount_cents", "campaign_lifetime_support_cents"}:
+        amount_columns = {
+            "currently_entitled_amount_cents",
+            "will_pay_amount_cents",
+            "campaign_lifetime_support_cents",
+            "lifetime_support_cents",
+            "tier_amount_cents",
+            "last_pledge_event_amount_cents",
+        }
+        count_columns = {
+            "pledge_event_count",
+            "tier_patron_count",
+            "tier_post_count",
+            "tier_remaining",
+            "tier_user_limit",
+            "user_like_count",
+            "campaign_patron_count",
+        }
+        date_columns = {
+            "last_charge_date",
+            "next_charge_date",
+            "pledge_relationship_start",
+            "first_pledge_event_date",
+            "last_pledge_event_date",
+            "user_created",
+            "tier_created_at",
+            "tier_edited_at",
+            "tier_published_at",
+            "tier_unpublished_at",
+            "campaign_created_at",
+            "campaign_published_at",
+            "address_created_at",
+        }
+        boolean_columns = {
+            "is_follower",
+            "is_gifted",
+            "is_free_trial",
+            "tier_published",
+            "tier_requires_shipping",
+            "user_hide_pledges",
+            "user_can_see_nsfw",
+            "user_is_creator",
+            "user_is_email_verified",
+            "campaign_has_rss",
+            "campaign_has_sent_rss_notify",
+            "campaign_is_charged_immediately",
+            "campaign_is_eligible_for_live",
+            "campaign_is_monthly",
+            "campaign_is_nsfw",
+            "campaign_show_earnings",
+        }
+        if column in amount_columns:
             try:
-                return float(value.replace(",", ""))
+                first_value = value.split(" / ", 1)[0]
+                return float(first_value.replace(",", ""))
             except ValueError:
                 return 0.0
-        if column in {"last_charge_date", "next_charge_date", "pledge_relationship_start"}:
-            return self._parse_patreon_datetime(value) or dt.datetime.min
-        if column in {"is_gifted", "is_free_trial"}:
-            return {"true": 1, "false": 0}.get(value.casefold(), -1)
+        if column in count_columns:
+            try:
+                first_value = value.split(" / ", 1)[0]
+                return int(first_value.replace(",", ""))
+            except ValueError:
+                return 0
+        if column in date_columns:
+            first_value = value.split(" / ", 1)[0]
+            return self._parse_patreon_datetime(first_value) or dt.datetime.min
+        if column in boolean_columns:
+            return {"true": 1, "false": 0}.get(value.split(" / ", 1)[0].casefold(), -1)
         if column == "tier_title":
             return self._patreon_tier_sort_value(value)
         return self._patreon_table_value(row, column).casefold()

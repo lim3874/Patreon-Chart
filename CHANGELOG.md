@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.9.0 - 2026-05-15
+
+### Added
+
+- Request every documented Patreon member field available from the campaign members endpoint, including deprecated `is_follower`.
+- Export expanded related data for users, tiers, campaigns, pledge history, and optional address fields.
+- Add tier Discord role IDs, campaign Discord server ID, pledge history summaries, social connection JSON, Patreon profile metadata, and campaign metadata to the Patreon API CSV.
+- Add more Patreon API table columns for the expanded export fields.
+- Add tests for expanded Patreon member row parsing.
+
+### Changed
+
+- Patreon member import now keeps syncing if optional address data is unavailable for the current OAuth token.
+- Patreon API table sorting now handles expanded amount, count, date, and boolean fields.
+
 ## 2.8.0 - 2026-05-14
 
 ### Added

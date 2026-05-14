@@ -12,7 +12,7 @@ from export_patreon_members import (  # noqa: E402
     SourceMessage,
     parse_member_record,
 )
-from patreon_api import extract_discord_connection  # noqa: E402
+from patreon_api import extract_discord_connection, member_to_row  # noqa: E402
 
 
 class PatreonParserTests(unittest.TestCase):
@@ -80,6 +80,62 @@ class PatreonParserTests(unittest.TestCase):
         )
         self.assertEqual(discord["user_id"], "1234567890")
         self.assertEqual(discord["username"], "membername")
+
+    def test_patreon_member_row_includes_extended_fields(self):
+        member = {
+            "id": "member-1",
+            "attributes": {
+                "full_name": "Member Name",
+                "email": "member@example.com",
+                "patron_status": "active_patron",
+                "currently_entitled_amount_cents": 499,
+                "is_gifted": True,
+                "is_free_trial": False,
+                "is_follower": False,
+            },
+            "relationships": {
+                "user": {"data": {"type": "user", "id": "user-1"}},
+                "campaign": {"data": {"type": "campaign", "id": "campaign-1"}},
+                "currently_entitled_tiers": {"data": [{"type": "tier", "id": "tier-1"}]},
+                "pledge_history": {"data": [{"type": "pledge-event", "id": "event-1"}]},
+            },
+        }
+        included = {
+            ("user", "user-1"): {
+                "id": "user-1",
+                "attributes": {
+                    "social_connections": {"discord": {"user_id": "111"}},
+                    "url": "https://patreon.com/user",
+                    "created": "2026-01-01T00:00:00+00:00",
+                },
+            },
+            ("campaign", "campaign-1"): {
+                "id": "campaign-1",
+                "attributes": {"discord_server_id": "222", "currency": "USD"},
+            },
+            ("tier", "tier-1"): {
+                "id": "tier-1",
+                "attributes": {
+                    "title": "Tier 2",
+                    "amount_cents": 499,
+                    "discord_role_ids": ["333"],
+                },
+            },
+            ("pledge-event", "event-1"): {
+                "id": "event-1",
+                "attributes": {
+                    "date": "2026-01-02T00:00:00+00:00",
+                    "type": "pledge_start",
+                    "payment_status": "Paid",
+                },
+            },
+        }
+        row = member_to_row(member, included)
+        self.assertEqual(row["discord_user_id"], "111")
+        self.assertEqual(row["campaign_discord_server_id"], "222")
+        self.assertEqual(row["tier_discord_role_ids"], "333")
+        self.assertEqual(row["pledge_event_count"], "1")
+        self.assertEqual(row["last_pledge_event_type"], "pledge_start")
 
 
 if __name__ == "__main__":
