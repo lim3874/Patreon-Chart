@@ -1113,18 +1113,6 @@ class PatreonMemberApp(tk.Tk):
             font=("Segoe UI", 11, "bold"),
         )
         self.patreon_refresh_button.pack(side=tk.LEFT, padx=(0, 12))
-        tk.Button(
-            toolbar,
-            text="Discord 봇 설정",
-            command=self.open_discord_settings,
-            bd=0,
-            bg=self.palette["panel_alt"],
-            fg=self.palette["ink"],
-            padx=18,
-            pady=10,
-            cursor="hand2",
-            font=("Segoe UI", 11, "bold"),
-        ).pack(side=tk.LEFT, padx=(0, 12))
         self.discord_refresh_button = tk.Button(
             toolbar,
             text=DISCORD_REFRESH_TEXT,

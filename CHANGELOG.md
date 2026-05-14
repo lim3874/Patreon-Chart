@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.12.1 - 2026-05-15
+
+### Changed
+
+- Remove the duplicate `Discord 봇 설정` button from the Patreon API toolbar now that Discord bot credentials are managed from the main settings dialog.
+- Keep `Discord 정보 채우기` in the Patreon API toolbar as the action for enriching already-loaded Patreon rows.
+
 ## 2.12.0 - 2026-05-15
 
 ### Added
