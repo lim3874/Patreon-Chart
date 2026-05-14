@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.13.3 - 2026-05-15
+
+### Fixed
+
+- Smooth Patreon API column drag previews by reusing the preview widget instead of recreating it for every drag.
+- Coalesce preview movement with Tk idle frames so rapid mouse events update to the latest position without extra repaint work.
+
 ## 2.13.2 - 2026-05-15
 
 ### Fixed
