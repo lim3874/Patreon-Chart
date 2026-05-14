@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.13.6 - 2026-05-15
+
+### Fixed
+
+- Stop showing a small default Windows title strip near the bottom-left of the screen when minimizing the custom borderless window.
+- Use native Win32 minimization for the custom title bar instead of temporarily restoring the default Tk window frame.
+
 ## 2.13.5 - 2026-05-15
 
 ### Fixed

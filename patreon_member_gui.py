@@ -218,8 +218,6 @@ class PatreonMemberApp(tk.Tk):
         self._custom_maximized = False
         self._normal_geometry = ""
         self._drag_state: tuple[int, int, int, int] | None = None
-        self._custom_chrome_restore_after_id: str | None = None
-        self._custom_chrome_restore_pending = False
         if self.custom_chrome:
             self.overrideredirect(True)
 
@@ -608,23 +606,24 @@ class PatreonMemberApp(tk.Tk):
             self.iconify()
             return
         self._hide_patreon_drag_ghost()
-        if self._custom_chrome_restore_after_id:
-            try:
-                self.after_cancel(self._custom_chrome_restore_after_id)
-            except tk.TclError:
-                pass
-            self._custom_chrome_restore_after_id = None
-        self._custom_chrome_restore_pending = True
-        self.overrideredirect(False)
-        self.update_idletasks()
+        if self._minimize_custom_window_with_win32():
+            return
         self.iconify()
-        self._custom_chrome_restore_after_id = self.after(30, self._restore_custom_chrome_after_map)
 
-    def _restore_custom_chrome_after_map(self) -> None:
-        self._custom_chrome_restore_after_id = None
-        self._custom_chrome_restore_pending = False
-        self.overrideredirect(True)
-        self._show_custom_chrome_in_taskbar()
+    def _minimize_custom_window_with_win32(self) -> bool:
+        if sys.platform != "win32":
+            return False
+        try:
+            import ctypes
+
+            hwnds = get_windows_toplevel_handles(self, ctypes)
+            if not hwnds:
+                return False
+            self._show_custom_chrome_in_taskbar()
+            sw_minimize = 6
+            return bool(ctypes.windll.user32.ShowWindow(ctypes.c_void_p(hwnds[-1]), sw_minimize))
+        except Exception:
+            return False
 
     def _toggle_custom_maximize(self) -> None:
         if self._custom_maximized:
